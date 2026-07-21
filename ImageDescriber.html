@@ -1,0 +1,2239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VisionVoice Ultra Pro — Accessible Vision AI Engine</title>
+  
+  <!-- Client-Side Local OCR Engine -->
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+
+  <style>
+    :root {
+      --bg-primary: #070a13;
+      --bg-card: #0f172a;
+      --bg-output: #090d16;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --accent: #38bdf8;
+      --accent-hover: #0284c7;
+      --border: #1e293b;
+      --success: #10b981;
+      --warning: #f59e0b;
+      --error: #ef4444;
+
+      /* Dynamic Accessibility Scaling Variables */
+      --font-scale: 1.05rem;
+      --button-padding: 0.85rem 1.4rem;
+      --heading-scale: 1.6rem;
+    }
+
+    /* WCAG AAA High Contrast Theme Modifiers */
+    .high-contrast {
+      --bg-primary: #000000 !important;
+      --bg-card: #000000 !important;
+      --bg-output: #000000 !important;
+      --text-main: #ffffff !important;
+      --text-muted: #ffffff !important;
+      --accent: #ffff00 !important;
+      --accent-hover: #ffffff !important;
+      --border: #ffffff !important;
+      --success: #00ff00 !important;
+      --warning: #ffff00 !important;
+      --error: #ff0000 !important;
+    }
+
+    * {
+      box-sizing: border-box;
+      transition: background-color 0.15s, color 0.15s, border-color 0.15s;
+    }
+
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background-color: var(--bg-primary);
+      color: var(--text-main);
+      margin: 0;
+      padding: 1.5rem;
+      display: flex;
+      justify-content: center;
+      font-size: var(--font-scale);
+      line-height: 1.6;
+    }
+
+    /* Accessibility Skip-to-Content Link */
+    .skip-link {
+      position: absolute;
+      top: -100px;
+      left: 1.5rem;
+      background-color: var(--accent);
+      color: #000;
+      padding: 0.5rem 1rem;
+      font-weight: bold;
+      border-radius: 8px;
+      z-index: 100000;
+      transition: top 0.2s ease;
+    }
+    .skip-link:focus-visible {
+      top: 1.5rem;
+      outline: 3px solid #fff !important;
+    }
+
+    /* Standardized Focus Outlines */
+    a:focus-visible,
+    button:focus-visible,
+    input:focus-visible,
+    select:focus-visible,
+    [tabindex="0"]:focus-visible {
+      outline: 3px solid var(--accent) !important;
+      outline-offset: 2px !important;
+    }
+
+    .container {
+      max-width: 1250px;
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+    }
+
+    .accessibility-bar {
+      background-color: var(--bg-card);
+      border: 2px solid var(--accent);
+      border-radius: 12px;
+      padding: 1rem 1.25rem;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .accessibility-title {
+      font-weight: 800;
+      color: var(--accent);
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .accessibility-controls {
+      display: flex;
+      gap: 0.6rem;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .btn-a11y {
+      background-color: #1e293b;
+      color: var(--text-main);
+      border: 2px solid var(--border);
+      padding: 0.5rem 0.9rem;
+      border-radius: 8px;
+      font-weight: 800;
+      cursor: pointer;
+      font-size: 1rem;
+      transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.15s;
+    }
+
+    .btn-a11y:hover, .btn-a11y:focus {
+      background-color: var(--accent);
+      color: #000;
+      border-color: #fff;
+    }
+
+    .btn-a11y:active {
+      transform: scale(0.96);
+    }
+
+    header h1 {
+      margin: 0;
+      color: var(--accent);
+      font-size: var(--heading-scale);
+    }
+
+    .layout-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 1.5rem;
+    }
+
+    @media (min-width: 950px) {
+      .layout-grid {
+        grid-template-columns: 1.1fr 0.9fr;
+      }
+    }
+
+    .card {
+      background-color: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 1.5rem;
+      box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.5);
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+    }
+
+    .engine-selector {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+
+    .engine-tab {
+      flex: 1;
+      padding: 0.85rem;
+      background-color: #1e293b;
+      border: 2px solid var(--border);
+      color: var(--text-muted);
+      border-radius: 10px;
+      font-weight: 800;
+      cursor: pointer;
+      text-align: center;
+      font-size: var(--font-scale);
+      transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.15s, border-color 0.15s;
+    }
+
+    .engine-tab.active {
+      border-color: var(--accent);
+      color: var(--text-main);
+      background-color: var(--bg-card);
+      box-shadow: 0 0 15px rgba(56, 189, 248, 0.2);
+    }
+
+    .engine-tab:active {
+      transform: scale(0.98);
+    }
+
+    /* Accessible Performance Disclaimers Controls */
+    .btn-disclaimer-trigger {
+      background-color: #1e293b;
+      border: 1.5px solid var(--border);
+      color: var(--text-main);
+      border-radius: 10px;
+      width: 44px;
+      height: 44px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      cursor: pointer;
+      font-size: 1.15rem;
+      transition: transform 0.15s ease, background-color 0.15s, border-color 0.15s;
+    }
+    .btn-disclaimer-trigger:hover, .btn-disclaimer-trigger:focus {
+      background-color: #2e3d52;
+      border-color: var(--accent);
+    }
+    .btn-disclaimer-trigger:active {
+      transform: scale(0.92);
+    }
+
+    .status-badge {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      color: var(--text-muted);
+      font-weight: 600;
+    }
+
+    .dot {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background-color: var(--warning);
+      flex-shrink: 0;
+    }
+
+    .dot.ready { background-color: var(--success); }
+    .dot.error { background-color: var(--error); }
+
+    .drop-zone {
+      border: 3px dashed var(--accent);
+      border-radius: 12px;
+      padding: 3.5rem 1.5rem;
+      text-align: center;
+      cursor: pointer;
+      background-color: rgba(56, 189, 248, 0.02);
+      transition: transform 0.2s ease, background-color 0.15s, border-color 0.15s;
+    }
+
+    .drop-zone:hover, .drop-zone:focus, .drop-zone.dragover {
+      background-color: rgba(56, 189, 248, 0.08);
+      border-color: #7dd3fc;
+    }
+
+    .input-group {
+      display: flex;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+    }
+
+    input[type="text"], input[type="password"], select {
+      flex: 1;
+      min-width: 200px;
+      padding: 0.85rem;
+      border-radius: 8px;
+      border: 2px solid var(--border);
+      background-color: var(--bg-primary);
+      color: var(--text-main);
+      font-size: var(--font-scale);
+      transition: border-color 0.15s;
+    }
+
+    button.primary-btn {
+      background-color: var(--accent);
+      color: #070a12;
+      font-weight: 800;
+      border: none;
+      padding: var(--button-padding);
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: var(--font-scale);
+      transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.15s;
+    }
+
+    button.primary-btn:hover, button.primary-btn:focus {
+      background-color: var(--accent-hover);
+      color: #fff;
+    }
+
+    button.primary-btn:active {
+      transform: scale(0.97);
+    }
+
+    button.primary-btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+      transform: none !important;
+    }
+
+    .btn-secondary {
+      background-color: #1e293b;
+      color: var(--text-main);
+      border: 2px solid var(--border);
+      padding: var(--button-padding);
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 800;
+      font-size: var(--font-scale);
+      transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.15s, border-color 0.15s;
+    }
+
+    .btn-secondary:hover, .btn-secondary:focus {
+      border-color: var(--accent);
+    }
+
+    .btn-secondary:active {
+      transform: scale(0.97);
+    }
+
+    /* Sandbox visual styling */
+    .preview-box {
+      position: relative;
+      display: inline-block;
+      align-self: center;
+      margin-top: 1rem;
+      max-width: 100%;
+    }
+
+    #image-preview {
+      display: none;
+      max-width: 100%;
+      max-height: 450px;
+      border-radius: 10px;
+      border: 2px solid var(--border);
+      transition: transform 0.2s, filter 0.2s;
+    }
+
+    #canvas-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      pointer-events: none;
+      border-radius: 10px;
+    }
+
+    /* Pipeline Step Tracker */
+    .progress-container {
+      background-color: var(--bg-output);
+      border: 2px solid var(--border);
+      border-radius: 12px;
+      padding: 1.25rem;
+      display: none;
+    }
+
+    .progress-steps {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 0.75rem;
+      margin-bottom: 1rem;
+    }
+
+    @media (min-width: 500px) {
+      .progress-steps {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+
+    .step {
+      padding: 0.6rem;
+      background-color: #1b263b;
+      border-radius: 8px;
+      text-align: center;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      border: 1px solid var(--border);
+      font-weight: 700;
+    }
+
+    .step.active {
+      color: var(--accent);
+      border-color: var(--accent);
+      box-shadow: 0 0 10px rgba(56, 189, 248, 0.15);
+    }
+
+    .step.done {
+      color: var(--success);
+      border-color: var(--success);
+    }
+
+    .progress-bar-wrapper {
+      background-color: #1e293b;
+      height: 8px;
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    .progress-bar {
+      background: linear-gradient(90deg, var(--accent), var(--success));
+      height: 100%;
+      width: 0%;
+      transition: width 0.3s ease;
+    }
+
+    /* Accessibility Voice Settings Panel */
+    .audio-console {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+      background-color: var(--bg-output);
+      border: 2px solid var(--border);
+      padding: 1.25rem;
+      border-radius: 12px;
+    }
+
+    .audio-sliders {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 0.75rem;
+    }
+
+    @media (min-width: 600px) {
+      .audio-sliders {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+
+    .slider-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+    }
+
+    .slider-group label {
+      font-weight: 700;
+      color: var(--text-muted);
+      font-size: 0.9rem;
+    }
+
+    .now-speaking {
+      display: none;
+      align-items: center;
+      gap: 0.75rem;
+      background-color: rgba(34, 197, 94, 0.1);
+      border: 1px solid var(--success);
+      border-radius: 8px;
+      padding: 0.75rem;
+      font-weight: 700;
+    }
+
+    .sentence-node {
+      border-radius: 4px;
+      padding: 1px 4px;
+      cursor: pointer;
+      transition: background-color 0.2s, border 0.2s;
+    }
+    .sentence-node:hover {
+      background-color: rgba(56, 189, 248, 0.15);
+    }
+
+    .output-section {
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+      margin-top: 1rem;
+    }
+
+    .output-card {
+      background-color: var(--bg-output);
+      border: 2px solid var(--border);
+      border-left: 8px solid var(--accent);
+      border-radius: 10px;
+      padding: 1.35rem;
+    }
+
+    .output-card.ocr-card {
+      border-left-color: var(--success);
+    }
+
+    .output-card.spatial-card {
+      border-left-color: var(--warning);
+    }
+
+    .output-card h3 {
+      margin: 0 0 0.5rem 0;
+      color: var(--accent);
+      font-size: calc(var(--font-scale) * 1.15);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .output-card.ocr-card h3 { color: var(--success); }
+    .output-card.spatial-card h3 { color: var(--warning); }
+
+    .output-content {
+      font-size: calc(var(--font-scale) * 1.05);
+      line-height: 1.7;
+    }
+
+    .object-tag {
+      display: inline-block;
+      background-color: #1e293b;
+      color: var(--text-main);
+      border: 1px solid var(--border);
+      padding: 0.45rem 0.85rem;
+      border-radius: 8px;
+      font-size: calc(var(--font-scale) * 0.95);
+      margin: 0.25rem;
+      font-weight: 700;
+    }
+
+    /* Dominant Color Chips Layout */
+    .color-chips-container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      margin-top: 0.75rem;
+    }
+
+    .color-chip {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      background-color: #1e293b;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.35rem 0.65rem;
+      font-size: 0.85rem;
+      font-weight: 700;
+    }
+
+    .color-preview-circle {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      border: 1px solid #ffffff44;
+    }
+
+    /* Modal dialog styling with backdrop blur */
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(4, 7, 16, 0.8);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      z-index: 99999;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 1rem;
+      animation: modalFadeIn 0.2s ease-out;
+    }
+    
+    .modal-content {
+      background-color: var(--bg-card);
+      border: 2px solid var(--border);
+      border-radius: 16px;
+      max-width: 600px;
+      width: 100%;
+      padding: 1.75rem;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+      animation: modalSlideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 0.75rem;
+    }
+    
+    .modal-close-btn {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      font-size: 2rem;
+      cursor: pointer;
+      line-height: 1;
+      padding: 0;
+      transition: color 0.15s;
+    }
+    .modal-close-btn:hover, .modal-close-btn:focus {
+      color: var(--error);
+      outline: none;
+    }
+    
+    .modal-body {
+      font-size: 1rem;
+      line-height: 1.6;
+      color: var(--text-main);
+    }
+    
+    @keyframes modalFadeIn {
+      from { background: rgba(4, 7, 16, 0); backdrop-filter: blur(0); }
+      to { background: rgba(4, 7, 16, 0.8); backdrop-filter: blur(8px); }
+    }
+    
+    @keyframes modalSlideUp {
+      from { transform: translateY(20px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      border: 0;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Skiplink for Screen Reader Navigation -->
+  <a href="#main-workspace" class="skip-link">Skip to main workspace content</a>
+
+  <!-- Fullscreen Drag and Drop Overlay -->
+  <div id="fullscreen-drag-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(7, 11, 19, 0.92); border: 4px dashed var(--accent); z-index: 9999; justify-content: center; align-items: center; pointer-events: none;">
+    <div style="text-align: center; color: var(--accent);">
+      <span style="font-size: 5rem;">📥</span>
+      <h2 style="margin-top: 1rem; font-size: 2rem; font-weight: 800;">Drop Anywhere to Analyze</h2>
+    </div>
+  </div>
+
+  <main class="container">
+    <!-- Accessibility Control Ribbon -->
+    <div class="accessibility-bar" role="region" aria-label="Accessibility Customization Controls">
+      <div class="accessibility-title">
+        <span>♿ Accessibility Controls:</span>
+      </div>
+      <div class="accessibility-controls">
+        <button class="btn-a11y" id="text-inc-btn" title="Increase Text and UI Size" aria-label="Increase text size">A+</button>
+        <button class="btn-a11y" id="text-dec-btn" title="Decrease Text and UI Size" aria-label="Decrease text size">A-</button>
+        <button class="btn-a11y" id="contrast-toggle" title="Toggle High Contrast Mode" aria-label="Toggle High Contrast Mode">High Contrast</button>
+      </div>
+    </div>
+
+    <header>
+      <h1>👁️ VisionVoice Ultra Pro</h1>
+      <p style="color: var(--text-muted); margin: 0.25rem 0 0 0;">
+        Frontier Multimodal Cloud Vision + Offline Local Scene Description & Document Workstation
+      </p>
+    </header>
+
+    <!-- Workspace Layout Partition -->
+    <div class="layout-grid" id="main-workspace">
+      
+      <!-- Panel A: Input Options & Config -->
+      <div class="card" aria-label="Image Intake Setup">
+        <div class="engine-selector">
+          <div class="engine-tab active" id="tab-api" tabindex="0" role="button" aria-selected="true">🚀 Frontier Cloud Vision (Gemini Key)</div>
+          <button class="btn-disclaimer-trigger" id="btn-info-cloud" aria-label="Open Cloud Vision Accuracy Profile" title="Cloud Performance Specs">ℹ️</button>
+          
+          <div class="engine-tab" id="tab-local" tabindex="0" role="button" aria-selected="false">⚡ Local Workstation (Private Offline AI)</div>
+          <button class="btn-disclaimer-trigger" id="btn-info-local" aria-label="Open Local Offline Accuracy Disclaimer" title="Offline AI Limitations">⚠️</button>
+        </div>
+
+        <!-- Cloud Model Settings (Default Active) -->
+        <div id="api-config-box" style="display: flex;" class="card">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <label for="api-key-input" style="font-size: 0.95rem; font-weight: 700; color: var(--text-muted);">
+              Google Gemini API Key:
+            </label>
+            <a href="https://aistudio.google.com/" target="_blank" rel="noopener noreferrer" style="font-size: 0.85rem; color: var(--accent); font-weight: 800; text-decoration: none;">Get Free Key ↗</a>
+          </div>
+          <div class="input-group">
+            <input type="password" id="api-key-input" placeholder="Enter Gemini API Key..." aria-label="Google Gemini API Key">
+          </div>
+          
+          <div class="input-group">
+            <div style="flex: 1;">
+              <label for="cloud-model" style="font-size: 0.85rem; font-weight: 700; color: var(--text-muted); display: block; margin-bottom: 0.25rem;">Model Choice:</label>
+              <select id="cloud-model" aria-label="Select Gemini Cloud Model Version">
+                <option value="gemini-3.5-flash">Gemini 3.5 Flash (Flagship Multimodal)</option>
+                <option value="gemini-2.5-pro">Gemini 2.5 Pro (Deep Visual Reasoning)</option>
+                <option value="gemini-1.5-pro">Gemini 1.5 Pro (Stable Reference)</option>
+              </select>
+            </div>
+            <div style="flex: 1;">
+              <label for="prompt-style" style="font-size: 0.85rem; font-weight: 700; color: var(--text-muted); display: block; margin-bottom: 0.25rem;">Detail Focus:</label>
+              <select id="prompt-style" aria-label="Select Cloud prompt detail strategy">
+                <option value="accessible">Accessible Description (Blind Assistance)</option>
+                <option value="technical">Technical Raw Object Audit</option>
+                <option value="creative">Atmospheric & Aesthetic Detail</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- System Pipeline Status Indicator -->
+        <div class="status-badge" aria-live="polite">
+          <span id="status-dot" class="dot ready"></span>
+          <span id="status-text">Cloud Mode active. Enter API Key to analyze.</span>
+        </div>
+
+        <!-- Webcam Stream Viewport -->
+        <div id="webcam-container" style="display: none; flex-direction: column; gap: 0.75rem; align-items: center; width: 100%;">
+          <video id="webcam-stream" autoplay playsinline style="width: 100%; max-height: 350px; border-radius: 10px; border: 2px solid var(--border); background-color: #000;"></video>
+          <div style="display: flex; gap: 0.5rem; width: 100%;">
+            <button class="primary-btn" id="webcam-capture-btn" style="flex: 1;">🔴 Capture Snapshot</button>
+            <button class="btn-secondary" id="webcam-close-btn" style="flex: 1;">Cancel</button>
+          </div>
+        </div>
+
+        <!-- Intake Drag Area -->
+        <div id="drop-zone" class="drop-zone" tabindex="0" role="button" aria-label="Upload Image Drop Zone. Press enter or space to select an image file.">
+          <p style="margin: 0; font-size: calc(var(--font-scale) * 1.25);">
+            📷 <strong>Drag & Drop Image Here</strong> or click to explore folders
+          </p>
+          <input type="file" id="file-input" accept="image/*" class="sr-only" tabindex="-1">
+        </div>
+
+        <div class="input-group">
+          <input type="text" id="url-input" placeholder="Or paste image URL (https://...)" aria-label="Image Web Address URL Input">
+          <button class="primary-btn" id="load-url-btn">Load URL</button>
+          <button class="btn-secondary" id="webcam-open-btn">📸 Use Camera</button>
+        </div>
+
+        <div style="display: flex; gap: 0.75rem;">
+          <button class="btn-secondary" id="clear-btn" style="display: none; flex: 1;">🗑️ Clear Board</button>
+          <button class="primary-btn" id="download-btn" style="display: none; flex: 1;">💾 Save Report</button>
+        </div>
+
+        <!-- Layout Preview Area -->
+        <div class="preview-box" id="preview-wrapper">
+          <img id="image-preview" alt="Loaded media preview">
+          <canvas id="canvas-overlay"></canvas>
+        </div>
+
+        <!-- Local Image Adjustments Panel -->
+        <div id="filter-controls" style="display: none; flex-direction: column; gap: 0.5rem; background-color: var(--bg-output); padding: 1rem; border-radius: 10px; border: 1px solid var(--border); margin-top: 0.75rem;">
+          <div style="font-weight: 700; font-size: 0.9rem; color: var(--accent); display: flex; justify-content: space-between;">
+            <span>🎨 Color & Contrast Calibration (Pre-processing)</span>
+            <button id="reset-filters-btn" style="background: none; border: none; color: var(--text-muted); cursor: pointer; text-decoration: underline; font-size: 0.8rem;">Reset</button>
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
+            <div class="slider-group">
+              <label for="img-contrast">Contrast: <span id="contrast-val">100</span>%</label>
+              <input type="range" id="img-contrast" min="50" max="250" value="100">
+            </div>
+            <div class="slider-group">
+              <label for="img-brightness">Brightness: <span id="brightness-val">100</span>%</label>
+              <input type="range" id="img-brightness" min="50" max="250" value="100">
+            </div>
+          </div>
+          <div style="display: flex; gap: 0.5rem; margin-top: 0.25rem;">
+            <button class="btn-secondary" id="rotate-left-btn" style="flex: 1; padding: 0.5rem;">↺ Rotate L</button>
+            <button class="btn-secondary" id="rotate-right-btn" style="flex: 1; padding: 0.5rem;">↻ Rotate R</button>
+            <button class="primary-btn" id="apply-filters-btn" style="flex: 2; padding: 0.5rem;">🔄 Bake and Reprocess Image</button>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Panel B: Progress Tracker and Audio Board -->
+      <div class="card" aria-label="Audio Controls and Running Status">
+        
+        <!-- Pipeline Progress Stepper -->
+        <div class="progress-container" id="progress-container">
+          <div style="font-weight: 800; margin-bottom: 0.5rem; color: var(--accent);">Asynchronous Task Pipeline:</div>
+          <div class="progress-steps">
+            <div class="step" id="step-preprocess">📷 Prep Image</div>
+            <div class="step" id="step-ocr">📝 OCR Engine</div>
+            <div class="step" id="step-caption">🧠 Scene Model</div>
+            <div class="step" id="step-detect">🗺️ Layout Map</div>
+          </div>
+          <div class="progress-bar-wrapper">
+            <div class="progress-bar" id="progress-bar"></div>
+          </div>
+        </div>
+
+        <!-- Audio Console -->
+        <div class="audio-console">
+          <div style="font-weight: 800; color: var(--accent); margin-bottom: 0.25rem;">🔊 Accessibility Voice Console</div>
+          
+          <div class="slider-group">
+            <label for="voice-select">TTS Voice Engine</label>
+            <select id="voice-select" aria-label="Select System TTS Voice"></select>
+          </div>
+
+          <div class="audio-sliders">
+            <div class="slider-group">
+              <label for="speed-range">Reading Rate: <span id="speed-val">1.0</span>x</label>
+              <input type="range" id="speed-range" min="0.5" max="2" step="0.1" value="1.0">
+            </div>
+            <div class="slider-group">
+              <label for="pitch-range">Voice Pitch: <span id="pitch-val">1.0</span></label>
+              <input type="range" id="pitch-range" min="0.5" max="1.5" step="0.1" value="1.0">
+            </div>
+          </div>
+
+          <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem;">
+            <button class="primary-btn" style="flex: 2;" id="speak-btn" disabled>🔊 Read Findings</button>
+            <button class="btn-secondary" style="flex: 1;" id="speak-pause-btn" title="Pause or Resume Reading">⏸️ Pause</button>
+            <button class="btn-secondary" style="flex: 1;" id="speak-stop-btn" title="Stop Reading">⏹️ Stop</button>
+          </div>
+
+          <!-- Dynamic Text Highlight Indicator -->
+          <div class="now-speaking" id="now-speaking-indicator">
+            <span style="animation: pulse 1s infinite; font-size: 1.25rem;">🗣️</span>
+            <div style="flex: 1; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;" id="now-speaking-text">
+              Reading findings...
+            </div>
+          </div>
+        </div>
+
+        <!-- Workspace Information Panel -->
+        <div class="card" style="background-color: var(--bg-output); border-color: var(--border); padding: 1rem;">
+          <div style="font-weight: 800; color: var(--accent); font-size: 0.95rem; margin-bottom: 0.5rem;">💡 Workspace Information Guide</div>
+          <div style="font-size: 0.85rem; line-height: 1.5; color: var(--text-muted); display: flex; flex-direction: column; gap: 0.5rem;">
+            <div>• <strong>Cloud tab (Default):</strong> High-fidelity multimodal visual analysis powered by Google's latest Gemini models. Generates detailed reports and verbatim OCR.</div>
+            <div>• <strong>Local Workstation tab:</strong> Stable offline document scan & scene descriptor. Runs 100% in-browser with Tesseract.js OCR and WASM-optimized scene captioning.</div>
+            <div>• <strong>Hotkey Support:</strong> Copy any image to your clipboard and hit <code>Ctrl + V</code> on this page to analyze instantly. Drag and drop works anywhere on screen.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Layout Analysis Outputs -->
+    <section class="output-section" aria-label="Visual Analysis Findings">
+      <!-- Card 1: Semantic AI description -->
+      <div class="output-card">
+        <h3>Detailed Visual Description (Interactive Highlight Mode)</h3>
+        <div style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.5rem;">
+          💡 Tip: Click on any sentence below to read that specific section aloud.
+        </div>
+        <div id="narrative-output" class="output-content" aria-live="assertive" tabindex="0">
+          Waiting for an image to load...
+        </div>
+      </div>
+
+      <!-- Card 2: Extracted text -->
+      <div class="output-card ocr-card">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+          <h3 style="margin: 0;">Extracted Document Text (OCR)</h3>
+          <button class="btn-secondary" id="copy-ocr-btn" style="padding: 0.35rem 0.75rem; font-size: 0.85rem;" title="Copy extracted text to clipboard">📋 Copy</button>
+        </div>
+        <div id="ocr-output" class="output-content" aria-live="polite" tabindex="0">
+          No written text extracted.
+        </div>
+      </div>
+
+      <!-- Card 3: Metrics (Brightness, Dominant color chips) excluded from speech queue -->
+      <div class="output-card spatial-card">
+        <h3>Image Metrics, Exposure & Colors</h3>
+        <div id="spatial-output" class="output-content" aria-live="polite" tabindex="0">
+          No image color and exposure metrics mapped.
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Disclaimer Modal Dialog overlay -->
+  <div class="modal-overlay" id="disclaimer-modal" role="dialog" aria-modal="true" aria-labelledby="modal-title" style="display: none;">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 id="modal-title" style="margin: 0; display: flex; align-items: center; gap: 0.75rem;">
+          <span id="modal-title-icon" aria-hidden="true">⚠️</span>
+          <span id="modal-title-text">Visual AI Technology Disclaimer</span>
+        </h2>
+        <button class="modal-close-btn" id="modal-close-btn" aria-label="Close disclaimer dialog">&times;</button>
+      </div>
+      <div class="modal-body" id="modal-body-content">
+        <!-- Content gets populated dynamically via javascript -->
+      </div>
+      <div class="modal-footer" style="display: flex; justify-content: flex-end; margin-top: 0.5rem;">
+        <button class="primary-btn" id="modal-confirm-btn">I Understand</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ES6 MODULE WORKSPACE -->
+  <script type="module">
+    // Load stable, un-gated, highly compatible Transformers.js v2 from jsdelivr CDN
+    import { pipeline, env } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2';
+
+    env.allowLocalModels = false;
+    // Omit remote custom credentials in fetch layers to bypass browser-extension header injections causing 401 blocks
+    env.useBrowserCache = true;
+    env.useFSCache = false;
+
+    // System UI Bindings
+    const statusDot = document.getElementById('status-dot');
+    const statusText = document.getElementById('status-text');
+    const tabLocal = document.getElementById('tab-local');
+    const tabApi = document.getElementById('tab-api');
+    const apiConfigBox = document.getElementById('api-config-box');
+    const apiKeyInput = document.getElementById('api-key-input');
+    const cloudModel = document.getElementById('cloud-model');
+    const promptStyle = document.getElementById('prompt-style');
+
+    const dropZone = document.getElementById('drop-zone');
+    const fileInput = document.getElementById('file-input');
+    const urlInput = document.getElementById('url-input');
+    const loadUrlBtn = document.getElementById('load-url-btn');
+    const imagePreview = document.getElementById('image-preview');
+    const canvasOverlay = document.getElementById('canvas-overlay');
+    const clearBtn = document.getElementById('clear-btn');
+    const downloadBtn = document.getElementById('download-btn');
+
+    const narrativeOutput = document.getElementById('narrative-output');
+    const ocrOutput = document.getElementById('ocr-output');
+    const spatialOutput = document.getElementById('spatial-output');
+
+    // Accessibility & Voice element mapping
+    const textIncBtn = document.getElementById('text-inc-btn');
+    const textDecBtn = document.getElementById('text-dec-btn');
+    const contrastToggle = document.getElementById('contrast-toggle');
+    const voiceSelect = document.getElementById('voice-select');
+    const speedRange = document.getElementById('speed-range');
+    const speedVal = document.getElementById('speed-val');
+    const pitchRange = document.getElementById('pitch-range');
+    const pitchVal = document.getElementById('pitch-val');
+    
+    const speakBtn = document.getElementById('speak-btn');
+    const speakPauseBtn = document.getElementById('speak-pause-btn');
+    const speakStopBtn = document.getElementById('speak-stop-btn');
+    const nowSpeakingIndicator = document.getElementById('now-speaking-indicator');
+    const nowSpeakingText = document.getElementById('now-speaking-text');
+
+    // Disclaimer triggers
+    const disclaimerModal = document.getElementById('disclaimer-modal');
+    const modalCloseBtn = document.getElementById('modal-close-btn');
+    const modalConfirmBtn = document.getElementById('modal-confirm-btn');
+    const btnInfoCloud = document.getElementById('btn-info-cloud');
+    const btnInfoLocal = document.getElementById('btn-info-local');
+    const modalBodyContent = document.getElementById('modal-body-content');
+    const modalTitleText = document.getElementById('modal-title-text');
+    const modalTitleIcon = document.getElementById('modal-title-icon');
+
+    // Webcam components
+    let webcamStream = null;
+    const btnWebcamOpen = document.getElementById('webcam-open-btn');
+    const webcamContainer = document.getElementById('webcam-container');
+    const webcamStreamEl = document.getElementById('webcam-stream');
+    const webcamCaptureBtn = document.getElementById('webcam-capture-btn');
+    const webcamCloseBtn = document.getElementById('webcam-close-btn');
+
+    // CSS Filters components
+    const filterControls = document.getElementById('filter-controls');
+    const contrastSlider = document.getElementById('img-contrast');
+    const brightnessSlider = document.getElementById('img-brightness');
+    const contrastVal = document.getElementById('contrast-val');
+    const brightnessVal = document.getElementById('brightness-val');
+    const resetFiltersBtn = document.getElementById('reset-filters-btn');
+    const rotateLeftBtn = document.getElementById('rotate-left-btn');
+    const rotateRightBtn = document.getElementById('rotate-right-btn');
+    const applyFiltersBtn = document.getElementById('apply-filters-btn');
+
+    // Application internal states
+    let currentFontRem = 1.05;
+    let selectedMode = 'api'; // Default to Cloud Mode
+    let captioner = null;
+    let currentOCRWords = [];
+    let currentExecutionId = 0;
+    let masterSpeechText = "";
+    let isInitializing = false;
+    let currentRotation = 0;
+    let lastFocusedElement = null; // Accessibility: restore focus state when closing modal
+
+    let speechQueue = [];
+    let currentUtteranceIndex = 0;
+
+    // Disclaimer Data Store
+    const disclaimerData = {
+      cloud: {
+        title: "Frontier Cloud AI Vision Capability Info",
+        icon: "🚀",
+        body: `<p>Google's frontier multimodal models (e.g., <strong>Gemini 3.5 Flash / Pro</strong>) process visual representations over high-performance cloud networks containing hundreds of billions of parameters.</p>
+               <p style="margin-top:0.75rem; font-weight: bold; color: var(--accent);">Key Performance Highlights:</p>
+               <ul style="margin-top:0.5rem; padding-left:1.25rem; display:flex; flex-direction:column; gap:0.5rem;">
+                 <li><strong>Advanced Spatial Reasoning:</strong> Correctly maps complex, crowded compositions, multi-subject scenes, camera perspectives, and visual relations.</li>
+                 <li><strong>Zero Local Footprint:</strong> Bypasses browser-level model compilation, requiring zero network model downloads to start.</li>
+                 <li><strong>Detailed Text Extraction (OCR):</strong> Transcribes documents, books, and tiny environmental signage verbatim.</li>
+               </ul>`
+      },
+      local: {
+        title: "Local Offline Workstation Accuracy Disclaimer",
+        icon: "⚠️",
+        body: `<p>The offline workstation AI (vit-gpt2-image-captioning) operates purely within your browser's CPU/GPU WebAssembly sandbox with zero remote servers.</p>
+               <p style="margin-top:0.75rem; font-weight: bold; color: var(--warning);">Performance Profile & Limits:</p>
+               <ul style="margin-top:0.5rem; padding-left:1.25rem; display:flex; flex-direction:column; gap:0.5rem;">
+                 <li><strong>Simplistic Assessments:</strong> Because browser-based models must maintain a tiny parameter footprint (~120MB) to prevent tab crashes, they are highly prone to basic caption errors, semantic misalignments, or missing environmental features.</li>
+                 <li><strong>Limited Complex Interpretation:</strong> Highly complex, crowded, or abstract images will not be analyzed with deep situational context.</li>
+                 <li><strong>Recommended Workflow:</strong> For accurate visual descriptions, using <strong>Frontier Cloud Mode</strong> with a free API key is strongly advised.</li>
+               </ul>`
+      }
+    };
+
+    // Euclidean Color Database
+    const COLOR_NAMES_DB = [
+      { hex: "#000000", name: "Deep Charcoal Black" },
+      { hex: "#ffffff", name: "Pure White" },
+      { hex: "#808080", name: "Slate Gray" },
+      { hex: "#c0c0c0", name: "Light Silver" },
+      { hex: "#ff0000", name: "Crimson Red" },
+      { hex: "#00ff00", name: "Lime Green" },
+      { hex: "#0000ff", name: "Deep Cobalt Blue" },
+      { hex: "#ffff00", name: "Warm Amber Yellow" },
+      { hex: "#ff00ff", name: "Fuchsia Purple" },
+      { hex: "#00ffff", name: "Electric Cyan / Aqua" },
+      { hex: "#800000", name: "Maroon / Dark Burgundy" },
+      { hex: "#008000", name: "Forest Olive Green" },
+      { hex: "#000080", name: "Navy Blue" },
+      { hex: "#808000", name: "Dark Olive" },
+      { hex: "#800080", name: "Plum Purple" },
+      { hex: "#008080", name: "Teal Green" },
+      { hex: "#ffa500", name: "Vibrant Orange" },
+      { hex: "#faebd7", name: "Antique Ivory Beige" },
+      { hex: "#f5f5dc", name: "Soft Alabaster Cream" },
+      { hex: "#deb887", name: "Burlywood Oak / Woodgrain" },
+      { hex: "#d2691e", name: "Warm Terracotta Brown" },
+      { hex: "#2f4f4f", name: "Dark Slate Charcoal" },
+      { hex: "#4682b4", name: "Steel Sky Blue" },
+      { hex: "#e0b0ff", name: "Mauve / Soft Lilac" }
+    ];
+
+    // Web Audio Synthesizer Cues
+    let audioCtx = null;
+    function playSound(type) {
+      try {
+        if (!audioCtx) {
+          audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        if (audioCtx.state === 'suspended') {
+          audioCtx.resume();
+        }
+        const osc = audioCtx.createOscillator();
+        const gainNode = audioCtx.createGain();
+        osc.connect(gainNode);
+        gainNode.connect(audioCtx.destination);
+        const now = audioCtx.currentTime;
+
+        if (type === 'load') {
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(261.63, now); // C4
+          osc.frequency.setValueAtTime(329.63, now + 0.1); // E4
+          osc.frequency.setValueAtTime(392.00, now + 0.2); // G4
+          gainNode.gain.setValueAtTime(0, now);
+          gainNode.gain.linearRampToValueAtTime(0.15, now + 0.05);
+          gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
+          osc.start(now);
+          osc.stop(now + 0.42);
+        } else if (type === 'success') {
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(523.25, now); // C5
+          osc.frequency.setValueAtTime(659.25, now + 0.08); // E5
+          gainNode.gain.setValueAtTime(0, now);
+          gainNode.gain.linearRampToValueAtTime(0.2, now + 0.03);
+          gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
+          osc.start(now);
+          osc.stop(now + 0.52);
+        } else if (type === 'tick') {
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(880.00, now);
+          gainNode.gain.setValueAtTime(0, now);
+          gainNode.gain.linearRampToValueAtTime(0.04, now + 0.002);
+          gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.04);
+          osc.start(now);
+          osc.stop(now + 0.05);
+        } else if (type === 'error') {
+          osc.type = 'sawtooth';
+          osc.frequency.setValueAtTime(150.00, now);
+          gainNode.gain.setValueAtTime(0, now);
+          gainNode.gain.linearRampToValueAtTime(0.15, now + 0.05);
+          gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
+
+          const osc2 = audioCtx.createOscillator();
+          const gain2 = audioCtx.createGain();
+          osc2.type = 'sawtooth';
+          osc2.frequency.setValueAtTime(145.00, now);
+          osc2.connect(gain2);
+          gain2.connect(audioCtx.destination);
+          gain2.gain.setValueAtTime(0, now);
+          gain2.gain.linearRampToValueAtTime(0.15, now + 0.05);
+          gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
+
+          osc.start(now);
+          osc.stop(now + 0.52);
+          osc2.start(now);
+          osc2.stop(now + 0.52);
+        }
+      } catch (err) {
+        console.warn("Auditory feedback engine initialized with security restrictions:", err);
+      }
+    }
+
+    const geminiPrompts = {
+      accessible: `You are an elite, highly detailed multimodal assistant. Analyze this image with the utmost visual accuracy and semantic depth. Break down complex scenes systematically.
+Provide a beautifully formatted markdown report containing:
+- **Primary Scenery Summary:** A concise 2-sentence description of the central subject, action, and setting.
+- **Detailed Visual Inventory:** Catalog key elements, people (their actions, expressions, clothes), background subjects, primary textures, and color relationships.
+- **Atmospheric Lighting & Contrast:** Primary light sources, direction of shadows, relative contrast, and overall visual mood.
+- **Verbatim Printed Text (OCR):** Transcribe any text (signs, symbols, documents, labels) verbatim. If none is present, write "None detected."
+- **Spatial Grid Composition:** Break down where key subjects are located across a 3x3 layout matrix (e.g. Foreground Center, Background Top-Left, etc.).
+Ensure absolute correctness based strictly on visible visual evidence. Do not speculate or extrapolate beyond what is manifest.`,
+      
+      technical: `Perform an exhaustive, high-precision technical audit of this image.
+Provide a formatted markdown report detailing:
+- **Camera Perspective:** Focus, field depth, camera angle, perspective geometric lines, capture focal parameters, and lens focus.
+- **Chromatic & Contrast Profile:** RGB balance, exposure level, warm/cool balance, dominant color profiles, flux levels, shadow contrasts, highlight focus areas.
+- **verbatim OCR Inventory:** Locate and transcribe all visible textual segments, symbols, or labels verbatim with their precise spatial region in the frame.
+- **Spatial Grid coordinates:** Identify relative region bounds of primary features and estimated spatial coordinates of key subjects.`,
+      
+      creative: `Analyze this image and compose an evocative, highly literary scene transcription.
+Provide:
+- **Atmosphere & Emotional Weight:** The aesthetic style, emotional weight, narrative feeling, and artistic tone of the image.
+- **Sensory & Lighting Textures:** Harmonious color details, lighting paths, material textures, reflections, and shadow play configurations.
+- **Narrative Composition:** Speculative context of the visual arrangement based strictly on visual indicators.`
+    };
+
+    // Asynchronous image loading helper (Resolves WebKit natural dimension race conditions)
+    function loadImageAsync(src) {
+      return new Promise((resolve, reject) => {
+        let img = new Image();
+        
+        function tryLoad(useCORS) {
+          img = new Image();
+          if (useCORS && (src.startsWith('http://') || src.startsWith('https://'))) {
+            img.crossOrigin = "anonymous";
+          }
+          img.onload = () => {
+            if (img.naturalWidth === 0 || img.naturalHeight === 0) {
+              reject(new Error("Decoded image frame natural dimensions evaluate as empty (0x0)."));
+            } else {
+              resolve(img);
+            }
+          };
+          img.onerror = () => {
+            if (useCORS) {
+              // Fallback to loading without CORS (allows image display and Cloud mode processing)
+              console.warn("CORS fetch blocked. Retrying without CORS fallback.");
+              tryLoad(false);
+            } else {
+              reject(new Error("The image failed to load or decode. Please verify the file format or web URL."));
+            }
+          };
+          img.src = src;
+        }
+        
+        tryLoad(true);
+      });
+    }
+
+    // Bakes visual coordinates onto an offscreen canvas to export a standardized Base64 payload (Bypasses URL string failures in API)
+    function getBase64FromImage(img) {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0);
+      return canvas.toDataURL('image/jpeg', 0.92);
+    }
+
+    // Modal Display Functions (Fixed: Focus restore and trap handling)
+    function showDisclaimer(type) {
+      lastFocusedElement = document.activeElement;
+      const data = disclaimerData[type];
+      modalTitleText.textContent = data.title;
+      modalTitleIcon.textContent = data.icon;
+      modalBodyContent.innerHTML = data.body;
+      disclaimerModal.style.display = 'flex';
+      
+      // Accessibility focus management
+      modalCloseBtn.focus();
+      playSound('load');
+      statusText.textContent = `Opened: ${data.title} dialog.`;
+    }
+
+    function hideDisclaimer() {
+      disclaimerModal.style.display = 'none';
+      if (lastFocusedElement) {
+        lastFocusedElement.focus();
+      }
+      playSound('success');
+      statusText.textContent = "Closed disclaimer dialog.";
+    }
+
+    btnInfoCloud.addEventListener('click', () => showDisclaimer('cloud'));
+    btnInfoLocal.addEventListener('click', () => showDisclaimer('local'));
+    modalCloseBtn.addEventListener('click', hideDisclaimer);
+    modalConfirmBtn.addEventListener('click', hideDisclaimer);
+
+    // Escape Key behavior to close modal
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && disclaimerModal.style.display === 'flex') {
+        hideDisclaimer();
+      }
+    });
+
+    // Close on overlay clicking
+    disclaimerModal.addEventListener('click', (e) => {
+      if (e.target === disclaimerModal) {
+        hideDisclaimer();
+      }
+    });
+
+    // UI Tab Panel Configuration
+    tabLocal.addEventListener('click', () => setMode('local'));
+    tabLocal.addEventListener('keypress', (e) => { if (e.key === 'Enter' || e.key === ' ') setMode('local'); });
+    tabApi.addEventListener('click', () => setMode('api'));
+    tabApi.addEventListener('keypress', (e) => { if (e.key === 'Enter' || e.key === ' ') setMode('api'); });
+
+    function setMode(mode) {
+      selectedMode = mode;
+      if (mode === 'local') {
+        tabLocal.classList.add('active');
+        tabLocal.setAttribute('aria-selected', 'true');
+        tabApi.classList.remove('active');
+        tabApi.setAttribute('aria-selected', 'false');
+        apiConfigBox.style.display = 'none';
+        statusDot.className = "dot ready";
+        statusText.textContent = "Local Workstation active. Stable WASM OCR & Color analysis workspace ready.";
+        
+        if (!captioner) {
+          initLocalEngines();
+        }
+      } else {
+        tabApi.classList.add('active');
+        tabApi.setAttribute('aria-selected', 'true');
+        tabLocal.classList.remove('active');
+        tabLocal.setAttribute('aria-selected', 'false');
+        apiConfigBox.style.display = 'flex';
+        statusDot.className = "dot ready";
+        statusText.textContent = "Frontier Cloud API active. Google Gemini Key required.";
+      }
+    }
+
+    // Font Scaling Actions
+    textIncBtn.addEventListener('click', () => {
+      if (currentFontRem < 1.8) {
+        currentFontRem += 0.1;
+        document.documentElement.style.setProperty('--font-scale', `${currentFontRem}rem`);
+        document.documentElement.style.setProperty('--heading-scale', `${1.6 * currentFontRem}rem`);
+      }
+    });
+
+    textDecBtn.addEventListener('click', () => {
+      if (currentFontRem > 0.8) {
+        currentFontRem -= 0.1;
+        document.documentElement.style.setProperty('--font-scale', `${currentFontRem}rem`);
+        document.documentElement.style.setProperty('--heading-scale', `${1.6 * currentFontRem}rem`);
+      }
+    });
+
+    contrastToggle.addEventListener('click', () => {
+      document.body.classList.toggle('high-contrast');
+      const isHigh = document.body.classList.contains('high-contrast');
+      contrastToggle.textContent = isHigh ? "Normal Theme" : "High Contrast Theme";
+      contrastToggle.setAttribute('aria-pressed', isHigh ? 'true' : 'false');
+    });
+
+    // Populate Synthesis Speech Engines
+    function populateVoices() {
+      if (!('speechSynthesis' in window)) return;
+      const voices = window.speechSynthesis.getVoices();
+      voiceSelect.innerHTML = '';
+      
+      const englishVoices = voices.filter(v => v.lang.startsWith('en'));
+      const activeList = englishVoices.length > 0 ? englishVoices : voices;
+
+      activeList.forEach((voice, index) => {
+        const option = document.createElement('option');
+        option.value = index;
+        option.textContent = `${voice.name} (${voice.lang})`;
+        voiceSelect.appendChild(option);
+      });
+    }
+
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.onvoiceschanged = populateVoices;
+      populateVoices();
+    }
+
+    speedRange.addEventListener('input', (e) => { speedVal.textContent = e.target.value; });
+    pitchRange.addEventListener('input', (e) => { pitchVal.textContent = e.target.value; });
+
+    // Progress flow tracker updates (Fixed: Implemented valid .classList.add mutations)
+    function updateProgress(step, percent) {
+      const bar = document.getElementById('progress-bar');
+      const stepPre = document.getElementById('step-preprocess');
+      const stepOcr = document.getElementById('step-ocr');
+      const stepCap = document.getElementById('step-caption');
+      const stepDet = document.getElementById('step-detect');
+      const progressContainer = document.getElementById('progress-container');
+
+      if (step === 'start') {
+        progressContainer.style.display = 'block';
+        bar.style.width = '10%';
+        [stepPre, stepOcr, stepCap, stepDet].forEach(el => el.className = 'step');
+        stepPre.classList.add('active');
+        playSound('tick');
+      } else if (step === 'preprocess') {
+        bar.style.width = '30%';
+        stepPre.classList.add('done');
+        stepOcr.classList.add('active');
+        playSound('tick');
+      } else if (step === 'ocr') {
+        bar.style.width = '55%';
+        stepOcr.classList.add('done');
+        stepCap.classList.add('active');
+        playSound('tick');
+      } else if (step === 'caption') {
+        bar.style.width = '80%';
+        stepCap.classList.add('done');
+        stepDet.classList.add('active');
+        playSound('tick');
+      } else if (step === 'detect') {
+        bar.style.width = '100%';
+        stepDet.classList.add('done');
+        setTimeout(() => {
+          progressContainer.style.display = 'none';
+        }, 1200);
+      }
+    }
+
+    // Dynamic label switcher to match step flows of active engine tab
+    function updateStepLabels() {
+      const stepPre = document.getElementById('step-preprocess');
+      const stepOcr = document.getElementById('step-ocr');
+      const stepCap = document.getElementById('step-caption');
+      const stepDet = document.getElementById('step-detect');
+      
+      if (selectedMode === 'api') {
+        stepPre.textContent = "📷 Prep Image";
+        stepOcr.textContent = "📝 Encode Base64";
+        stepCap.textContent = "🧠 Gemini Cloud";
+        stepDet.textContent = "🔊 Audio Speak";
+      } else {
+        stepPre.textContent = "📷 Prep Image";
+        stepOcr.textContent = "📝 Tesseract OCR";
+        stepCap.textContent = "🧠 Local Caption";
+        stepDet.textContent = "🔊 Audio Speak";
+      }
+    }
+
+    // Stable local WASM model pipeline loader (Forces un-gated Xenova vit-gpt2 for clean local downloads without 401 blocks)
+    async function initLocalEngines() {
+      if (isInitializing) return;
+      isInitializing = true;
+      statusDot.className = 'dot';
+      statusText.textContent = "Loading local scene description model (WASM - Stable offline visual model)...";
+
+      try {
+        captioner = null;
+
+        // Force quantized execution path to minimize size/bandwidth footprint while maintaining un-gated local descriptions
+        captioner = await pipeline('image-to-text', 'Xenova/vit-gpt2-image-captioning', {
+          quantized: true
+        });
+
+        statusDot.className = 'dot ready';
+        statusText.textContent = "Local Workstation active. vit-gpt2 image captioner & Tesseract OCR ready.";
+      } catch (err) {
+        console.warn("Local model initialization failure context:", err);
+        statusDot.className = 'dot error';
+        statusText.textContent = `Local Engine Load Error: ${err.message}. Please reload or use Cloud Mode.`;
+        playSound('error');
+      } finally {
+        isInitializing = false;
+      }
+    }
+
+    // High-Precision Color Quantization & Euclidean Distance Color Matching
+    function analyzeLocalImageMetadata(img) {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      
+      const maxDim = 150;
+      let w = img.naturalWidth;
+      let h = img.naturalHeight;
+      if (w > h) {
+        if (w > maxDim) {
+          h = Math.round(h * (maxDim / w));
+          w = maxDim;
+        }
+      } else {
+        if (h > maxDim) {
+          w = Math.round(w * (maxDim / h));
+          h = maxDim;
+        }
+      }
+      
+      canvas.width = w;
+      canvas.height = h;
+      ctx.drawImage(img, 0, 0, w, h);
+      
+      const imgData = ctx.getImageData(0, 0, w, h);
+      const data = imgData.data;
+      
+      let totalR = 0, totalG = 0, totalB = 0;
+      const colorCounts = {};
+      
+      for (let i = 0; i < data.length; i += 4) {
+        const r = data[i];
+        const g = data[i+1];
+        const b = data[i+2];
+        const a = data[i+3];
+        
+        if (a < 128) continue; // Ignore highly transparent layers
+        
+        totalR += r;
+        totalG += g;
+        totalB += b;
+        
+        // Group colors into a quantized 16-step space
+        const qr = Math.round(r / 16) * 16;
+        const qg = Math.round(g / 16) * 16;
+        const qb = Math.round(b / 16) * 16;
+        const hex = rgbToHex(qr, qg, qb);
+        colorCounts[hex] = (colorCounts[hex] || 0) + 1;
+      }
+      
+      const pixelCount = data.length / 4;
+      const avgR = Math.round(totalR / pixelCount);
+      const avgG = Math.round(totalG / pixelCount);
+      const avgB = Math.round(totalB / pixelCount);
+      
+      // Compute perceived relative luminance
+      const brightness = Math.round(0.2126 * avgR + 0.7152 * avgG + 0.0722 * avgB);
+      let brightnessLabel = "Balanced exposure levels";
+      if (brightness < 65) brightnessLabel = "Dark environment profile (Under-exposed)";
+      else if (brightness > 200) brightnessLabel = "Bright highlighting profile (Over-exposed)";
+      
+      const sortedColors = Object.entries(colorCounts)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5)
+        .map(entry => entry[0]);
+        
+      return {
+        brightnessValue: brightness,
+        brightnessLabel: brightnessLabel,
+        dominantColors: sortedColors,
+        averageColor: rgbToHex(avgR, avgG, avgB)
+      };
+    }
+
+    function rgbToHex(r, g, b) {
+      const clamp = (val) => Math.max(0, Math.min(255, val));
+      return "#" + ((1 << 24) + (clamp(r) << 16) + (clamp(g) << 8) + clamp(b)).toString(16).slice(1);
+    }
+
+    function hexToRgb(hex) {
+      const bigint = parseInt(hex.replace("#", ""), 16);
+      return {
+        r: (bigint >> 16) & 255,
+        g: (bigint >> 8) & 255,
+        b: bigint & 255
+      };
+    }
+
+    // closest descriptive color name mapping
+    function getClosestColorName(hex) {
+      const target = hexToRgb(hex);
+      let minDistance = Infinity;
+      let closestName = "Undefined hue";
+      
+      for (const color of COLOR_NAMES_DB) {
+        const curr = hexToRgb(color.hex);
+        const dist = Math.sqrt(
+          Math.pow(target.r - curr.r, 2) +
+          Math.pow(target.g - curr.g, 2) +
+          Math.pow(target.b - curr.b, 2)
+        );
+        if (dist < minDistance) {
+          minDistance = dist;
+          closestName = color.name;
+        }
+      }
+      return closestName;
+    }
+
+    // Dynamic scale vector calculation for visual canvas boxes (Text OCR Overlays)
+    function drawBoundingBoxes(words, imgElement, canvasElement) {
+      const ctx = canvasElement.getContext('2d');
+      const naturalWidth = imgElement.naturalWidth;
+      const naturalHeight = imgElement.naturalHeight;
+      
+      // IndexSizeError & Division By Zero Preemptive Isolation Guard
+      if (!naturalWidth || !naturalHeight) return;
+
+      const rect = imgElement.getBoundingClientRect();
+      
+      canvasElement.width = rect.width;
+      canvasElement.height = rect.height;
+      ctx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+
+      const scaleX = rect.width / naturalWidth;
+      const scaleY = rect.height / naturalHeight;
+
+      if (words && words.length > 0) {
+        ctx.strokeStyle = '#22c55e'; // Green highlights for mapped text blocks
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([4, 4]); // Dashed parameters for OCR regions
+
+        words.forEach(word => {
+          if (word.confidence < 50) return; // Skip low confidence elements
+          const { x0, y0, x1, y1 } = word.bbox;
+
+          const x = x0 * scaleX;
+          const y = y0 * scaleY;
+          const w = (x1 - x0) * scaleX;
+          const h = (y1 - y0) * scaleY;
+
+          ctx.strokeRect(x, y, w, h);
+          ctx.fillStyle = 'rgba(34, 197, 94, 0.05)';
+          ctx.fillRect(x, y, w, h);
+        });
+      }
+    }
+
+    // Tesseract Local OCR processing
+    async function runLocalOCR(imageSrc) {
+      if (typeof Tesseract === 'undefined') {
+        console.warn("Local Tesseract library was unavailable.");
+        return { text: "Local OCR library blocked from loading. Check network status.", words: [] };
+      }
+      try {
+        const result = await Tesseract.recognize(imageSrc, 'eng', {
+          logger: m => {
+            if (m.status === 'recognizing text') {
+              updateProgress('ocr', Math.round(m.progress * 100));
+            }
+          }
+        });
+        return {
+          text: result.data.text.trim(),
+          words: result.data.words || []
+        };
+      } catch (err) {
+        console.warn("Local OCR exception logged:", err);
+        return { text: "", words: [] };
+      }
+    }
+
+    // Cloud Request Gateway
+    async function runCloudGemini(base64Image, apiKey, selectedModel, stylePreset) {
+      const base64Data = base64Image.replace(/^data:image\/(png|jpeg|webp|jpg);base64,/, '');
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${selectedModel}:generateContent?key=${apiKey}`;
+      const sysPrompt = geminiPrompts[stylePreset] || geminiPrompts.accessible;
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{
+            parts: [
+              { text: sysPrompt },
+              { inline_data: { mime_type: "image/jpeg", data: base64Data } }
+            ]
+          }]
+        })
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Google API gateway rejected request with status code ${response.status}: ${errorText}`);
+      }
+      const data = await response.json();
+      
+      if (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts[0]) {
+        return data.candidates[0].content.parts[0].text;
+      } else {
+        throw new Error("Invalid API payload returned from the Google endpoint.");
+      }
+    }
+
+    // Markdown simple regex parser
+    function parseMarkdownToHTML(text) {
+      let html = text.replace(/\*\*([\s\S]+?)\*\*/g, '<strong>$1</strong>');
+      html = html.replace(/^\s*-\s+(.+)$/gm, '<li>$1</li>');
+      html = html.replace(/(<li>[\s\S]+?<\/li>)/g, '<ul>$1</ul>');
+      html = html.replace(/<\/ul>\s*<ul>/g, ''); // deduplicate adjacent elements
+      html = html.replace(/^\s*###\s+(.+)$/gm, '<h4 style="color: var(--accent); margin-top: 1rem; margin-bottom: 0.25rem;">$1</h4>');
+      html = html.replace(/^\s*##\s+(.+)$/gm, '<h3 style="color: var(--accent); margin-top: 1rem; margin-bottom: 0.25rem;">$1</h3>');
+      html = html.replace(/\n/g, '<br>');
+      return html;
+    }
+
+    // Recursively traverses the generated markdown HTML tree and safely maps sentence elements
+    function wrapSentencesSafe(html) {
+      const container = document.createElement('div');
+      container.innerHTML = html || '';
+      
+      let sentenceIdx = 0;
+      speechQueue = [];
+
+      function traverseAndWrap(node) {
+        if (node.nodeType === Node.TEXT_NODE) {
+          const text = node.textContent;
+          const sentences = text.match(/[^.!?]+[.!?]+(?:\s|$)|[^.!?]+$/g) || [text];
+          
+          const fragment = document.createDocumentFragment();
+          sentences.forEach(s => {
+            const cleanS = s.trim();
+            if (!cleanS) return;
+            
+            const span = document.createElement('span');
+            span.className = 'sentence-node';
+            span.id = `sentence-${sentenceIdx}`;
+            span.textContent = s;
+            
+            const currentIdx = sentenceIdx;
+            span.addEventListener('click', (e) => {
+              e.stopPropagation();
+              currentUtteranceIndex = currentIdx;
+              speakSequence(speechQueue.slice(currentIdx));
+            });
+            
+            fragment.appendChild(span);
+            speechQueue.push(cleanS);
+            sentenceIdx++;
+          });
+          node.parentNode.replaceChild(fragment, node);
+        } else if (node.nodeType === Node.ELEMENT_NODE) {
+          if (node.tagName !== 'SCRIPT' && node.tagName !== 'STYLE') {
+            const children = Array.from(node.childNodes);
+            children.forEach(traverseAndWrap);
+          }
+        }
+      }
+
+      Array.from(container.childNodes).forEach(traverseAndWrap);
+      return container.innerHTML;
+    }
+
+    // Unified narrative markdown renderer & sentence highlighting compiler (Fixed: Clean global scope mapping)
+    function renderNarrativeMarkup(text) {
+      const rawHTML = parseMarkdownToHTML(text);
+      const wrappedHTML = wrapSentencesSafe(rawHTML);
+      narrativeOutput.innerHTML = wrappedHTML;
+      narrativeOutput.focus();
+    }
+
+    // Unified Pipeline Executive
+    async function processImage(imageSource) {
+      currentExecutionId++;
+      const thisExecutionId = currentExecutionId;
+
+      if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+      nowSpeakingIndicator.style.display = 'none';
+      clearSentenceHighlights();
+
+      // Clear UI regions
+      narrativeOutput.textContent = "Loading framework processors...";
+      ocrOutput.textContent = "Scanning characters...";
+      spatialOutput.textContent = "Mapping layout coordinates...";
+      speakBtn.disabled = true;
+      downloadBtn.style.display = 'none';
+      clearBtn.style.display = 'block';
+      filterControls.style.display = 'none';
+
+      currentOCRWords = [];
+      const ctx = canvasOverlay.getContext('2d');
+      ctx.clearRect(0, 0, canvasOverlay.width, canvasOverlay.height);
+
+      updateStepLabels();
+      updateProgress('start', 0);
+
+      try {
+        // --- Asynchronous Pre-loading Guard Context ---
+        updateProgress('preprocess', 20);
+        const loadedImg = await loadImageAsync(imageSource);
+        if (thisExecutionId !== currentExecutionId) return;
+
+        // Synchronize display element with fully verified frame
+        imagePreview.src = loadedImg.src;
+        imagePreview.style.display = 'block';
+
+        // Extract base64 payload cleanly via offscreen canvas pixel drawing
+        let base64DataURL;
+        try {
+          base64DataURL = getBase64FromImage(loadedImg);
+        } catch (canvasErr) {
+          console.warn("Canvas drawing blocked by origin rules. Attempting raw source string fallback:", canvasErr);
+          if (imageSource.startsWith('data:')) {
+            base64DataURL = imageSource;
+          } else {
+            throw new Error("This web address is protected by cross-origin security rules. Please download the image file to your device and drag-and-drop it directly for secure offline analysis.");
+          }
+        }
+
+        // --- Cloud Mode (Gemini Core Processing Layer) ---
+        if (selectedMode === 'api') {
+          const apiKey = apiKeyInput.value.trim();
+          if (!apiKey) {
+            narrativeOutput.textContent = "To utilize Google's Frontier Multimodal Vision Model, please retrieve and enter an API Key using the 'Get Free Key' link in the cloud settings card. Alternatively, select the 'Local Workstation' tab to run offline models directly in your browser without any keys!";
+            ocrOutput.textContent = "Cloud processing unavailable without valid credentials.";
+            spatialOutput.textContent = "Cloud processing unavailable without valid credentials.";
+            updateProgress('detect', 100);
+            playSound('error');
+            return;
+          }
+
+          updateProgress('preprocess', 40);
+          const rawPayload = await runCloudGemini(base64DataURL, apiKey, cloudModel.value, promptStyle.value);
+          if (thisExecutionId !== currentExecutionId) return;
+
+          updateProgress('ocr', 60);
+          updateProgress('caption', 80);
+
+          let splitNarrative = rawPayload;
+          let splitOcr = "No document text identified.";
+          const ocrDivider = rawPayload.toUpperCase().indexOf("EXTRACTED TEXT:");
+
+          if (ocrDivider !== -1) {
+            splitNarrative = rawPayload.substring(0, ocrDivider).trim();
+            splitOcr = rawPayload.substring(ocrDivider + 15).trim();
+          }
+
+          // Render purely detailed visual description (excluding metrics completely)
+          renderNarrativeMarkup(splitNarrative);
+          
+          ocrOutput.textContent = splitOcr;
+          spatialOutput.textContent = "Spatial mapping structures processed directly inside the visual description report above.";
+
+          // Audio Console strictly speaks only Card 1 (visual description) + optional Card 2 (OCR text)
+          masterSpeechText = `${splitNarrative}. Text segments read as follows: ${splitOcr}`;
+          speakBtn.disabled = false;
+          downloadBtn.style.display = 'inline-block';
+          filterControls.style.display = 'flex';
+          
+          playSound('success');
+          speakSequence(speechQueue);
+          updateProgress('detect', 100);
+        }
+
+        // --- Local Workstation Mode (Stable Canvas & Tesseract Processing) ---
+        if (selectedMode === 'local') {
+          updateProgress('preprocess', 40);
+          
+          // Pixel color data extraction (Fully local WASM / Canvas operations)
+          const meta = analyzeLocalImageMetadata(loadedImg);
+          
+          updateProgress('ocr', 60);
+          updateProgress('caption', 80);
+          
+          // Run OCR and scene description concurrently
+          const [ocrRes, captionRes] = await Promise.all([
+            runLocalOCR(imageSource),
+            captioner(base64DataURL)
+          ]);
+
+          if (thisExecutionId !== currentExecutionId) return;
+          updateProgress('detect', 100);
+
+          ocrOutput.textContent = ocrRes.text || "No alphanumeric characters could be extracted locally.";
+          currentOCRWords = ocrRes.words;
+          drawBoundingBoxes(currentOCRWords, imagePreview, canvasOverlay);
+
+          // Format Xenova vit-gpt2 results
+          const rawCaption = captionRes[0]?.generated_text || "";
+          const formattedCaption = rawCaption ? rawCaption.charAt(0).toUpperCase() + rawCaption.slice(1) : "";
+
+          // Local Spatial Density Mapping to augment vit-gpt2's description of complex text-heavy images
+          let spatialTextReport = "";
+          if (ocrRes.words && ocrRes.words.length > 0) {
+            const regions = { top: 0, middle: 0, bottom: 0, left: 0, center: 0, right: 0 };
+            ocrRes.words.forEach(w => {
+              if (w.confidence < 50) return;
+              const { x0, y0, x1, y1 } = w.bbox;
+              const cx = (x0 + x1) / (2 * loadedImg.naturalWidth);
+              const cy = (y0 + y1) / (2 * loadedImg.naturalHeight);
+              
+              if (cy < 0.35) regions.top++;
+              else if (cy > 0.65) regions.bottom++;
+              else regions.middle++;
+              
+              if (cx < 0.35) regions.left++;
+              else if (cx > 0.65) regions.right++;
+              else regions.center++;
+            });
+
+            const verticalDensity = regions.top >= regions.middle && regions.top >= regions.bottom ? "upper half" :
+                                    regions.bottom >= regions.top && regions.bottom >= regions.middle ? "lower half" : "center region";
+            const horizontalDensity = regions.left >= regions.center && regions.left >= regions.right ? "left-aligned" :
+                                      regions.right >= regions.left && regions.right >= regions.center ? "right-aligned" : "centered";
+            spatialTextReport = `Text density mapping shows a concentration of written characters primarily clustered in the ${verticalDensity} and ${horizontalDensity} of the layout.`;
+          }
+
+          // Scene description card strictly holds only the semantic visual text
+          let visualDescription = "";
+          if (formattedCaption) {
+            visualDescription += `This image depicts: ${formattedCaption}. `;
+          } else {
+            visualDescription += `The local offline model could not generate a standard image caption. `;
+          }
+          if (ocrRes.text) {
+            visualDescription += `The local scanner detected written text reading: "${ocrRes.text.replace(/\n/g, ' ')}". `;
+          }
+          if (spatialTextReport) {
+            visualDescription += spatialTextReport;
+          }
+
+          // Build click-to-speak sentence mappings using global function
+          renderNarrativeMarkup(visualDescription);
+
+          // Technical indicators are rendered inside a separate, purely visual third card (Excluded from speech queue)
+          spatialOutput.innerHTML = `<div style="font-weight:700;">Exposure Level Analysis: ${meta.brightnessLabel} (Brightness index calculated at ${meta.brightnessValue} of 255)</div>`;
+          spatialOutput.innerHTML += `<div style="margin-top:0.5rem;font-weight:700;">Average frame tone calculated: <span style="color:${meta.averageColor}">${meta.averageColor}</span></div>`;
+          spatialOutput.innerHTML += `<div style="margin-top:0.5rem;font-weight:700;">Quantized Palette Mapped (Euclidean Approximation):</div>`;
+          
+          const chipsWrapper = document.createElement('div');
+          chipsWrapper.className = 'color-chips-container';
+          
+          const matchedDescs = meta.dominantColors.map(hex => getClosestColorName(hex));
+          meta.dominantColors.forEach(hex => {
+            const chip = document.createElement('div');
+            chip.className = 'color-chip';
+            
+            const circle = document.createElement('div');
+            circle.className = 'color-preview-circle';
+            circle.style.backgroundColor = hex;
+            
+            const label = document.createElement('span');
+            label.textContent = `${hex} - ${getClosestColorName(hex)}`;
+            
+            chip.appendChild(circle);
+            chip.appendChild(label);
+            chipsWrapper.appendChild(chip);
+          });
+          spatialOutput.appendChild(chipsWrapper);
+
+          // Speech console plays only Card 1 (Caption + Mapped Text Summary) skipping raw color/brightness numbers
+          let spokenText = visualDescription;
+          masterSpeechText = spokenText;
+
+          // Re-generate highlights for combined speech block
+          renderNarrativeMarkup(masterSpeechText);
+
+          speakBtn.disabled = false;
+          downloadBtn.style.display = 'inline-block';
+          filterControls.style.display = 'flex';
+
+          playSound('success');
+          speakSequence(speechQueue);
+        }
+      } catch (err) {
+        if (thisExecutionId === currentExecutionId) {
+          narrativeOutput.textContent = `Processing halted due to error: ${err.message}`;
+          ocrOutput.textContent = "Pipeline analysis aborted.";
+          spatialOutput.textContent = "Pipeline analysis aborted.";
+          console.error(err);
+          playSound('error');
+        }
+      } finally {
+        if (thisExecutionId === currentExecutionId) {
+          document.getElementById('progress-container').style.display = 'none';
+        }
+      }
+    }
+
+    // Sentence-By-Sentence speech queue processor (Prevents iOS thread drops and enables visual tracking)
+    function speakSequence(sentences) {
+      if (!('speechSynthesis' in window)) return;
+      window.speechSynthesis.cancel();
+      nowSpeakingIndicator.style.display = 'none';
+      clearSentenceHighlights();
+
+      if (sentences.length === 0) return;
+      
+      currentUtteranceIndex = speechQueue.indexOf(sentences[0]);
+      speakNextQueueItem(sentences);
+    }
+
+    function speakNextQueueItem(sentences) {
+      if (sentences.length === 0) {
+        nowSpeakingIndicator.style.display = 'none';
+        clearSentenceHighlights();
+        return;
+      }
+
+      const activeText = sentences[0];
+      const utterance = new SpeechSynthesisUtterance(activeText);
+
+      // Verify voice index boundaries safely prior to initialization
+      if (voiceSelect.value !== "" && voiceSelect.value >= 0) {
+        const voices = window.speechSynthesis.getVoices().filter(v => v.lang.startsWith('en'));
+        const activeList = voices.length > 0 ? voices : window.speechSynthesis.getVoices();
+        const selectedVoice = activeList[voiceSelect.value];
+        if (selectedVoice) {
+          utterance.voice = selectedVoice;
+        }
+      }
+
+      utterance.rate = parseFloat(speedRange.value);
+      utterance.pitch = parseFloat(pitchRange.value);
+
+      utterance.onstart = () => {
+        nowSpeakingIndicator.style.display = 'flex';
+        nowSpeakingText.textContent = activeText;
+        highlightSentenceNode(currentUtteranceIndex);
+      };
+
+      utterance.onend = () => {
+        currentUtteranceIndex++;
+        speakNextQueueItem(sentences.slice(1));
+      };
+
+      utterance.onerror = () => {
+        nowSpeakingIndicator.style.display = 'none';
+        clearSentenceHighlights();
+      };
+
+      window.speechSynthesis.speak(utterance);
+    }
+
+    function highlightSentenceNode(idx) {
+      clearSentenceHighlights();
+      const node = document.getElementById(`sentence-${idx}`);
+      if (node) {
+        node.style.backgroundColor = 'rgba(245, 158, 11, 0.2)'; // Amber highlight
+        node.style.borderBottom = '2px solid var(--warning)';
+        node.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+    }
+
+    function clearSentenceHighlights() {
+      const nodes = document.querySelectorAll('.sentence-node');
+      nodes.forEach(node => {
+        node.style.backgroundColor = 'transparent';
+        node.style.borderBottom = 'none';
+      });
+    }
+
+    // CSS filter matrix adjustments
+    contrastSlider.addEventListener('input', (e) => {
+      contrastVal.textContent = e.target.value;
+      applyCSSVisualAdjustments();
+    });
+
+    brightnessSlider.addEventListener('input', (e) => {
+      brightnessVal.textContent = e.target.value;
+      applyCSSVisualAdjustments();
+    });
+
+    rotateLeftBtn.addEventListener('click', () => {
+      currentRotation = (currentRotation - 90) % 360;
+      applyCSSVisualAdjustments();
+    });
+
+    rotateRightBtn.addEventListener('click', () => {
+      currentRotation = (currentRotation + 90) % 360;
+      applyCSSVisualAdjustments();
+    });
+
+    resetFiltersBtn.addEventListener('click', () => {
+      contrastSlider.value = 100;
+      brightnessSlider.value = 100;
+      contrastVal.textContent = "100";
+      brightnessVal.textContent = "100";
+      currentRotation = 0;
+      applyCSSVisualAdjustments();
+    });
+
+    function applyCSSVisualAdjustments() {
+      imagePreview.style.transform = `rotate(${currentRotation}deg)`;
+      imagePreview.style.filter = `contrast(${contrastSlider.value}%) brightness(${brightnessSlider.value}%)`;
+      // Clear overlay boxes during rotation to avoid alignment skewing
+      const ctx = canvasOverlay.getContext('2d');
+      ctx.clearRect(0, 0, canvasOverlay.width, canvasOverlay.height);
+    }
+
+    // Bakes visual adjustments directly into underlying pixels for improved OCR/Caption accuracy
+    applyFiltersBtn.addEventListener('click', () => {
+      if (!imagePreview.naturalWidth) return;
+      updateProgress('start', 0);
+      
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      
+      const is90Deg = Math.abs(currentRotation % 180) === 90;
+      canvas.width = is90Deg ? imagePreview.naturalHeight : imagePreview.naturalWidth;
+      canvas.height = is90Deg ? imagePreview.naturalWidth : imagePreview.naturalHeight;
+
+      ctx.translate(canvas.width / 2, canvas.height / 2);
+      ctx.rotate((currentRotation * Math.PI) / 180);
+      ctx.filter = `contrast(${contrastSlider.value}%) brightness(${brightnessSlider.value}%)`;
+      
+      ctx.drawImage(imagePreview, -imagePreview.naturalWidth / 2, -imagePreview.naturalHeight / 2);
+      
+      const bakedDataURL = canvas.toDataURL('image/jpeg');
+      imagePreview.src = bakedDataURL;
+      
+      // Reset transformations since filters have been baked into pixel stream
+      contrastSlider.value = 100;
+      brightnessSlider.value = 100;
+      contrastVal.textContent = "100";
+      brightnessVal.textContent = "100";
+      currentRotation = 0;
+      applyCSSVisualAdjustments();
+
+      processImage(bakedDataURL);
+    });
+
+    // Webcam implementation
+    btnWebcamOpen.addEventListener('click', async () => {
+      try {
+        webcamStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+        webcamStreamEl.srcObject = webcamStream;
+        webcamContainer.style.display = 'flex';
+        dropZone.style.display = 'none';
+        playSound('load');
+      } catch (err) {
+        alert("Unable to access connected camera hardware: " + err.message);
+        playSound('error');
+      }
+    });
+
+    function stopWebcam() {
+      if (webcamStream) {
+        webcamStream.getTracks().forEach(track => track.stop());
+        webcamStream = null;
+      }
+      webcamContainer.style.display = 'none';
+      dropZone.style.display = 'block';
+    }
+
+    webcamCloseBtn.addEventListener('click', stopWebcam);
+
+    webcamCaptureBtn.addEventListener('click', () => {
+      if (!webcamStreamEl.videoWidth) return;
+      const canvas = document.createElement('canvas');
+      canvas.width = webcamStreamEl.videoWidth;
+      canvas.height = webcamStreamEl.videoHeight;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(webcamStreamEl, 0, 0, canvas.width, canvas.height);
+      const dataUrl = canvas.toDataURL('image/jpeg');
+      
+      imagePreview.src = dataUrl;
+      imagePreview.style.display = 'block';
+      
+      stopWebcam();
+      processImage(dataUrl);
+    });
+
+    // Fullscreen Drag and Drop System Overlay Listeners
+    let dragCounter = 0;
+    window.addEventListener('dragenter', (e) => {
+      e.preventDefault();
+      dragCounter++;
+      document.getElementById('fullscreen-drag-overlay').style.display = 'flex';
+    });
+
+    window.addEventListener('dragover', (e) => {
+      e.preventDefault();
+    });
+
+    window.addEventListener('dragleave', (e) => {
+      e.preventDefault();
+      dragCounter--;
+      if (dragCounter === 0) {
+        document.getElementById('fullscreen-drag-overlay').style.display = 'none';
+      }
+    });
+
+    window.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dragCounter = 0;
+      document.getElementById('fullscreen-drag-overlay').style.display = 'none';
+      if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+        handleFile(e.dataTransfer.files[0]);
+      }
+    });
+
+    // Clipboard Listener (Allows pasting screenshots with standard keyboard shortcuts)
+    window.addEventListener('paste', (e) => {
+      const items = (e.clipboardData || e.originalEvent.clipboardData).items;
+      for (let index in items) {
+        const item = items[index];
+        if (item.kind === 'file' && item.type.startsWith('image/')) {
+          const blob = item.getAsFile();
+          const reader = new FileReader();
+          reader.onload = (event) => {
+            playSound('load');
+            processImage(event.target.result);
+          };
+          reader.readAsDataURL(blob);
+          break;
+        }
+      }
+    });
+
+    // Align canvas bounds on preview resize
+    const resizeObserver = new ResizeObserver(() => {
+      if (imagePreview.style.display === 'block') {
+        const rect = imagePreview.getBoundingClientRect();
+        canvasOverlay.style.width = `${rect.width}px`;
+        canvasOverlay.style.height = `${rect.height}px`;
+        if (currentOCRWords.length > 0) {
+          drawBoundingBoxes(currentOCRWords, imagePreview, canvasOverlay);
+        }
+      }
+    });
+    resizeObserver.observe(imagePreview);
+
+    speakBtn.addEventListener('click', () => { if (speechQueue.length > 0) speakSequence(speechQueue); });
+    
+    speakPauseBtn.addEventListener('click', () => {
+      if (!('speechSynthesis' in window)) return;
+      if (window.speechSynthesis.paused) {
+        window.speechSynthesis.resume();
+        speakPauseBtn.textContent = "⏸️ Pause";
+      } else {
+        window.speechSynthesis.pause();
+        speakPauseBtn.textContent = "▶️ Resume";
+      }
+    });
+
+    speakStopBtn.addEventListener('click', () => {
+      if (!('speechSynthesis' in window)) return;
+      window.speechSynthesis.cancel();
+      nowSpeakingIndicator.style.display = 'none';
+      clearSentenceHighlights();
+      speakPauseBtn.textContent = "⏸️ Pause";
+    });
+
+    // Save report payload
+    downloadBtn.addEventListener('click', () => {
+      const rNarrative = narrativeOutput.textContent.trim();
+      const rOcr = ocrOutput.textContent.trim();
+      const rSpatial = spatialOutput.textContent.trim();
+
+      const docText = `===========================================================
+VISIONVOICE ULTRA PRO - VISUAL ANALYSIS DATA REPORT
+===========================================================
+Created: ${new Date().toLocaleString()}
+Mode: ${selectedMode.toUpperCase()}
+
+[1. PRIMARY SCENE DESCRIPTION]
+${rNarrative}
+
+[2. OCR DOCUMENT TEXT TRANSCRIPT]
+${rOcr}
+
+[3. COORDINATES & SPATIAL ENVIRONMENT GRID]
+${rSpatial}
+===========================================================`;
+
+      const blob = new Blob([docText], { type: 'text/plain;charset=utf-8' });
+      const dlLink = document.createElement('a');
+      dlLink.href = URL.createObjectURL(blob);
+      dlLink.download = `VisionVoice-Report-${Date.now()}.txt`;
+      document.body.appendChild(dlLink);
+      dlLink.click();
+      document.body.removeChild(dlLink);
+    });
+
+    // Clipboard Copy Handler for OCR results
+    document.getElementById('copy-ocr-btn').addEventListener('click', () => {
+      const text = ocrOutput.textContent.trim();
+      if (text && text !== "No written text extracted.") {
+        navigator.clipboard.writeText(text);
+        playSound('success');
+      }
+    });
+
+    function clearBoard() {
+      if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+      nowSpeakingIndicator.style.display = 'none';
+      clearSentenceHighlights();
+      imagePreview.style.display = 'none';
+      imagePreview.src = '';
+      
+      const ctx = canvasOverlay.getContext('2d');
+      ctx.clearRect(0, 0, canvasOverlay.width, canvasOverlay.height);
+      
+      fileInput.value = '';
+      urlInput.value = '';
+      narrativeOutput.textContent = 'Waiting for an image to load...';
+      ocrOutput.textContent = 'No written text extracted.';
+      spatialOutput.textContent = 'No image color and exposure metrics mapped.';
+      
+      clearBtn.style.display = 'none';
+      downloadBtn.style.display = 'none';
+      filterControls.style.display = 'none';
+      speakBtn.disabled = true;
+      currentOCRWords = [];
+      masterSpeechText = "";
+    }
+    clearBtn.addEventListener('click', clearBoard);
+
+    // Intake pipeline inputs
+    function handleFile(file) {
+      if (!file || !file.type.startsWith('image/')) return;
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        playSound('load');
+        processImage(e.target.result);
+      };
+      reader.readAsDataURL(file);
+    }
+
+    dropZone.addEventListener('click', () => fileInput.click());
+    dropZone.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        fileInput.click();
+      }
+    });
+
+    dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('dragover'); });
+    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+    dropZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropZone.classList.remove('dragover');
+      if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
+    });
+
+    fileInput.addEventListener('change', (e) => { if (e.target.files[0]) handleFile(e.target.files[0]); });
+
+    loadUrlBtn.addEventListener('click', () => {
+      const url = urlInput.value.trim();
+      if (url) {
+        playSound('load');
+        processImage(url);
+      }
+    });
+  </script>
+</body>
+</html>
