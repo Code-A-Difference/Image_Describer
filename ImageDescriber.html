@@ -112,6 +112,13 @@
       border-radius: .65rem;
       background: var(--panel);
     }
+    .service-note {
+      margin: 1rem 0;
+      padding: .85rem 1rem;
+      border: 2px solid var(--focus);
+      border-radius: .65rem;
+      background: var(--panel);
+    }
     .card {
       margin: 1rem 0;
       padding: clamp(1rem, 3vw, 1.5rem);
@@ -200,7 +207,7 @@
 
     <header>
       <h1>Understand a picture</h1>
-      <p class="intro">Choose a picture or take one with your camera. ClearView will create a plain-language caption on this device. You can listen to it with speech.</p>
+      <p class="intro">Choose a picture or take one with your camera. ClearView uses the Code A Difference AI service to create a plain-language description. You can listen to it with speech.</p>
     </header>
 
     <div class="notice" role="note">
@@ -229,26 +236,20 @@
         </div>
       </div>
       <img id="preview" class="preview" alt="Selected image preview" hidden>
-      <p class="fine-print">Your photo is processed in this browser and is not uploaded to an AI service. The first time you describe an image, the app downloads the model files from Hugging Face. After that, your browser may keep them in its cache.</p>
+      <p class="fine-print">To describe a picture, it is sent over HTTPS to the Code A Difference AI service and then to the provider configured by the site. The service keeps API keys on its server; you do not need your own key. Avoid sending private or sensitive images. The optional text reader runs in your browser.</p>
     </section>
 
     <section class="card" aria-labelledby="describe-heading">
       <h2 id="describe-heading">2. Get a description</h2>
-      <p class="hint">The first run can take a few minutes while the free model is downloaded. Later runs are usually faster. Image understanding runs on your device; no account or API key is needed.</p>
-      <div class="setting" style="margin: 1rem 0;">
-        <label for="caption-model">Description model</label>
-        <select id="caption-model">
-          <option value="detailed" selected>Richer model — about 1.5 GB, requires WebGPU</option>
-          <option value="compact">Compact model — smaller download, works on most devices</option>
-        </select>
-        <p class="fine-print">The richer model can give fuller captions, but its first download is about 1.5 GB and needs WebGPU. It is selected on supported browsers; other browsers start with the compact model. Choose the compact model if the richer one is too slow or unavailable.</p>
-      </div>
+      <p class="hint">The site uses the AI providers configured by its administrator. No personal API key or model download is needed.</p>
+      <p class="service-note" id="service-note" role="note" tabindex="-1" hidden>The shared AI service is available when this tool is opened on the <a href="https://codeadifference.ct.ws/projects/image-describer/">Code A Difference website</a>. Open it there to describe a picture without setting up a personal API key.</p>
       <div class="actions">
         <button type="button" class="primary" id="describe" disabled>Describe this picture</button>
+        <button type="button" id="cancel-description" disabled>Cancel description</button>
       </div>
       <div class="progress-wrap" id="progress-wrap" hidden>
-        <label for="progress">Model loading and image description</label>
-        <progress id="progress"></progress>
+        <label for="progress">Image description in progress</label>
+        <progress id="progress" aria-label="Image description in progress"></progress>
       </div>
       <p class="status" id="status" role="status" aria-live="polite" aria-atomic="true">Choose an image to begin.</p>
     </section>
@@ -294,18 +295,16 @@
     </section>
 
     <footer>
-      ClearView runs image models locally. AI descriptions and text recognition can make mistakes; no current image model can promise complete accuracy.
+      ClearView uses the site’s configured AI service for image descriptions and reads printed text in your browser. Both can make mistakes; no AI system can promise complete accuracy.
     </footer>
   </main>
 
   <script type="module">
-    const MODELS = {
-      compact: { id: "Xenova/vit-gpt2-image-captioning", dtype: "q8" },
-      detailed: { id: "Nagafi/moondream2-q4-onnx", dtype: "q4" }
-    };
-    const MODULE_URL = "https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.2.0";
-
     const byId = (id) => document.getElementById(id);
+    const AI_HOSTNAME = "codeadifference.ct.ws";
+    const AI_ENDPOINT = "/api/ai.php";
+    const AI_AVAILABLE = location.protocol === "https:" && location.hostname === AI_HOSTNAME;
+    const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
     const fileInput = byId("file-input");
     const preview = byId("preview");
     const camera = byId("camera");
@@ -314,22 +313,18 @@
     const description = byId("description");
     const status = byId("status");
     const progressWrap = byId("progress-wrap");
-    const progress = byId("progress");
     const readButton = byId("read");
     const copyButton = byId("copy");
     const saveButton = byId("save");
     const voiceSelect = byId("voice");
     const rateInput = byId("rate");
     const rateValue = byId("rate-value");
-    if (!navigator.gpu) byId("caption-model").value = "compact";
     let selectedImage = "";
-    let modelPromise = null;
-    let modelPromiseId = "";
-    let modelProvider = "";
     let ocrWorkerPromise = null;
     let ocrRequestNumber = 0;
     let cameraStream = null;
     let requestNumber = 0;
+    let activeDescriptionController = null;
     let fontSize = 1.125;
     let availableVoices = [];
 
@@ -339,6 +334,8 @@
     }
 
     function setImage(dataUrl, sourceName) {
+      activeDescriptionController?.abort();
+      activeDescriptionController = null;
       requestNumber += 1;
       ocrRequestNumber += 1;
       stopSpeech();
@@ -347,8 +344,8 @@
       preview.src = dataUrl;
       preview.hidden = false;
       byId("clear").hidden = false;
-      describeButton.disabled = false;
-      byId("caption-model").disabled = false;
+      describeButton.disabled = !AI_AVAILABLE;
+      byId("cancel-description").disabled = true;
       description.textContent = "";
       readButton.disabled = true;
       copyButton.disabled = true;
@@ -358,11 +355,15 @@
       byId("text-output").hidden = true;
       byId("text-output").textContent = "";
       byId("text-status").textContent = "Choose “Find text in this picture” if you want to read printed words.";
-      setStatus((sourceName ? sourceName + " is ready. " : "") + "Choose “Describe this picture” when you are ready.", "success");
-      describeButton.focus();
+      setStatus(AI_AVAILABLE
+        ? (sourceName ? sourceName + " is ready. " : "") + "Choose “Describe this picture” when you are ready."
+        : "This picture is ready, but descriptions are only available on the Code A Difference website.", AI_AVAILABLE ? "success" : "error");
+      (AI_AVAILABLE ? describeButton : byId("service-note")).focus?.();
     }
 
     function clearImage() {
+      activeDescriptionController?.abort();
+      activeDescriptionController = null;
       requestNumber += 1;
       ocrRequestNumber += 1;
       stopSpeech();
@@ -373,6 +374,7 @@
       fileInput.value = "";
       byId("clear").hidden = true;
       describeButton.disabled = true;
+      byId("cancel-description").disabled = true;
       description.textContent = "";
       readButton.disabled = true;
       copyButton.disabled = true;
@@ -382,7 +384,6 @@
       byId("text-output").hidden = true;
       byId("text-output").textContent = "";
       byId("text-status").textContent = "Choose an image to enable text reading.";
-      byId("caption-model").disabled = false;
       progressWrap.hidden = true;
       setStatus("Choose an image to begin.");
       byId("camera-open").focus();
@@ -397,100 +398,133 @@
       });
     }
 
+    function canvasToBlob(canvas, quality) {
+      return new Promise((resolve, reject) => {
+        canvas.toBlob((blob) => blob ? resolve(blob) : reject(new Error("This browser could not prepare the picture.")), "image/jpeg", quality);
+      });
+    }
+
+    function blobToDataUrl(blob) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result || ""));
+        reader.onerror = () => reject(new Error("This browser could not prepare the picture."));
+        reader.readAsDataURL(blob);
+      });
+    }
+
     async function prepareImage(source) {
       const image = await loadDataUrl(source);
-      const maximum = 1600;
-      const scale = Math.min(1, maximum / Math.max(image.naturalWidth, image.naturalHeight));
       const canvas = document.createElement("canvas");
-      canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
-      canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
       const context = canvas.getContext("2d");
       if (!context) throw new Error("This browser could not prepare the picture.");
-      context.fillStyle = "#fff";
-      context.fillRect(0, 0, canvas.width, canvas.height);
-      context.drawImage(image, 0, 0, canvas.width, canvas.height);
-      return canvas.toDataURL("image/jpeg", 0.9);
-    }
-
-    async function getCaptioner(modelId, forcePortableRuntime) {
-      if (modelPromise && modelPromiseId === modelId && (!forcePortableRuntime || modelProvider === "cpu")) return modelPromise;
-      const model = Object.values(MODELS).find((entry) => entry.id === modelId);
-      if (!model) throw new Error("Choose an available description model.");
-      const detailedModel = modelId === MODELS.detailed.id;
-      if (detailedModel && !navigator.gpu) {
-        throw new Error("The richer model needs WebGPU, which is not available in this browser. Choose the compact model instead.");
-      }
-      modelPromiseId = modelId;
-      modelProvider = "loading";
-      modelPromise = (async () => {
-        setStatus(detailedModel
-          ? "Loading the richer local vision model. Its first download is about 1.5 GB."
-          : "Loading the compact image model. This can take a few minutes the first time.");
-        progressWrap.hidden = false;
-        progress.removeAttribute("value");
-        try {
-          const { pipeline } = await import(MODULE_URL);
-          const options = {
-            dtype: model.dtype,
-            progress_callback: (event) => {
-              if (event && event.status === "progress" && Number.isFinite(event.progress)) {
-                progress.value = event.progress;
-                progress.max = 100;
-              }
-            }
-          };
-          if (detailedModel) {
-            setStatus("Loading the richer model on your device. Keep this page open while it downloads.");
-            const loaded = await pipeline("image-to-text", model.id, { ...options, device: "webgpu" });
-            modelProvider = "webgpu";
-            return loaded;
-          }
-          if (navigator.gpu && !forcePortableRuntime) {
-            try {
-              setStatus("Loading the compact model for your device.");
-              const loaded = await pipeline("image-to-text", model.id, { ...options, device: "webgpu" });
-              modelProvider = "webgpu";
-              return loaded;
-            } catch (gpuError) {
-              console.info("WebGPU was unavailable for the compact model; retrying with the portable browser runtime.", gpuError);
-            }
-          }
-          setStatus("Loading the compact model with the portable browser runtime.");
-          const loaded = await pipeline("image-to-text", model.id, options);
-          modelProvider = "cpu";
-          return loaded;
-        } catch (error) {
-          if (modelPromiseId === modelId) {
-            modelPromise = null;
-            modelPromiseId = "";
-            modelProvider = "";
-          }
-          throw new Error("The selected image model could not be loaded. Check your internet connection, or choose the compact model. " + readableError(error));
+      for (const maximum of [1600, 1280, 1024]) {
+        const scale = Math.min(1, maximum / Math.max(image.naturalWidth, image.naturalHeight));
+        canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+        canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+        context.fillStyle = "#fff";
+        context.fillRect(0, 0, canvas.width, canvas.height);
+        context.drawImage(image, 0, 0, canvas.width, canvas.height);
+        for (const quality of [0.84, 0.74, 0.64]) {
+          const blob = await canvasToBlob(canvas, quality);
+          if (blob.size <= MAX_IMAGE_BYTES) return blobToDataUrl(blob);
         }
-      })();
-      return modelPromise;
-    }
-
-    function readableError(error) {
-      const message = error && error.message ? error.message : "";
-      if (/fetch|network|load|http/i.test(message)) return "The model download may have been interrupted.";
-      return message.slice(0, 240);
+      }
+      throw new Error("This picture is too large to send. Choose a smaller image and try again.");
     }
 
     function cleanCaption(value) {
-      let text = String(value || "").replace(/\s+/g, " ").trim();
-      text = text.replace(/^["“”']+|["“”']+$/g, "").trim();
+      let text = String(value || "").replace(/```[\w-]*\s*/gi, "").replace(/```/g, "");
+      text = text.replace(/^\s{0,3}#{1,6}\s+/gm, "");
+      text = text.replace(/^\s*(?:[-*•]|\d+[.)])\s+/gm, "");
+      text = text.replace(/\[([^\]]+)\]\([^)]+\)/g, "$1");
+      text = text.replace(/<[^>]*>/g, " ");
+      text = text.replace(/\*\*(.*?)\*\*/g, "$1").replace(/\*(.*?)\*/g, "$1");
+      text = text.replace(/[`_~]/g, "").replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim();
+      text = text.replace(/^['"“”']+|['"“”']+$/g, "").trim();
       if (!text) return "";
       return /[.!?…]$/.test(text) ? text : text + ".";
     }
 
+    function isHostGatePage(contentType, text) {
+      return /text\/html/i.test(contentType || "") && /slowAES|\/aes\.js|__test=/.test(String(text || "").slice(0, 4000));
+    }
+
+    let gateRenewal = null;
+
+    function renewHostGate() {
+      if (gateRenewal) return gateRenewal;
+      gateRenewal = new Promise((resolve) => {
+        const previousCookie = document.cookie;
+        const frame = document.createElement("iframe");
+        frame.style.display = "none";
+        frame.setAttribute("aria-hidden", "true");
+        frame.src = `${location.origin}/api/ai.php?gate=${Date.now()}`;
+        const started = Date.now();
+        let loads = 0;
+        let finished = false;
+        const done = (ok) => {
+          if (finished) return;
+          finished = true;
+          clearInterval(poll);
+          frame.remove();
+          gateRenewal = null;
+          resolve(ok);
+        };
+        frame.onload = () => { if (++loads >= 2) window.setTimeout(() => done(true), 100); };
+        const poll = window.setInterval(() => {
+          if (document.cookie !== previousCookie && /(^|;\s*)__test=/.test(document.cookie)) done(true);
+          else if (Date.now() - started > 10000) done(false);
+        }, 150);
+        document.body.append(frame);
+      });
+      return gateRenewal;
+    }
+
+    async function fetchAi(url, options) {
+      const response = await fetch(url, options);
+      const contentType = response.headers.get("content-type") || "";
+      if (!response.ok || !/text\/html/i.test(contentType)) return response;
+      const body = await response.clone().text().catch(() => "");
+      if (!isHostGatePage(contentType, body)) return response;
+      await renewHostGate();
+      return fetch(url, options);
+    }
+
+    function readableServiceError(error, statusCode) {
+      if (error?.name === "AbortError") return "The description was cancelled.";
+      const message = String(error?.message || "");
+      if (/configured|api key|provider|model|not enabled/i.test(message)) {
+        return "The shared AI service is not ready. The site administrator needs to check its AI settings.";
+      }
+      if (/429|rate limit|quota|temporarily busy/i.test(message) || statusCode === 429) {
+        return "The AI service is busy right now. Wait a moment, then try again.";
+      }
+      if (statusCode === 413 || statusCode === 422 || /too large|unsupported image/i.test(message)) {
+        return "This picture could not be processed. Choose another picture and try again.";
+      }
+      if (error instanceof TypeError || /network|fetch|reach/i.test(message)) {
+        return "I could not reach the AI service. Check your internet connection and try again.";
+      }
+      return "The AI service could not describe this picture. Please try again in a moment.";
+    }
+
     async function describeImage() {
       if (!selectedImage) return;
+      if (!AI_AVAILABLE) {
+        setStatus("Open the Image Describer on the Code A Difference website to use its shared AI service.", "error");
+        return;
+      }
       const thisRequest = ++requestNumber;
-      const modelChoice = byId("caption-model").value;
-      const modelId = MODELS[modelChoice].id;
+      const controller = new AbortController();
+      controller.timedOut = false;
+      const timeoutId = window.setTimeout(() => {
+        controller.timedOut = true;
+        controller.abort();
+      }, 90000);
+      activeDescriptionController = controller;
       describeButton.disabled = true;
-      byId("caption-model").disabled = true;
+      byId("cancel-description").disabled = false;
       byId("read-text").disabled = true;
       readButton.disabled = true;
       copyButton.disabled = true;
@@ -498,50 +532,69 @@
       description.textContent = "";
       stopSpeech();
       progressWrap.hidden = false;
-      progress.removeAttribute("value");
-      setStatus("Preparing the picture on this device.");
+      setStatus("Preparing the picture for a plain-language description.");
       try {
-        const captioner = await getCaptioner(modelId);
+        const imageForService = await prepareImage(selectedImage);
         if (thisRequest !== requestNumber) return;
-        setStatus("Looking at the picture. Please wait.");
-        const imageForModel = await prepareImage(selectedImage);
-        const maxTokens = modelChoice === "detailed" ? 112 : 64;
-        let result;
-        try {
-          result = await captioner(imageForModel, { max_new_tokens: maxTokens });
-        } catch (gpuError) {
-          if (modelChoice !== "compact" || modelProvider !== "webgpu") throw gpuError;
-          setStatus("The graphics runtime could not process this picture. Retrying with the portable browser runtime.");
-          modelPromise = null;
-          modelPromiseId = "";
-          modelProvider = "";
-          const portableCaptioner = await getCaptioner(modelId, true);
-          result = await portableCaptioner(imageForModel, { max_new_tokens: maxTokens });
+        setStatus("Sending the picture to the AI service. Please wait.");
+        const imageData = imageForService.slice(imageForService.indexOf(",") + 1);
+        const response = await fetchAi(AI_ENDPOINT, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          signal: controller.signal,
+          body: JSON.stringify({
+            system: "You are a careful image description assistant for people who may not be able to see the picture. Describe only what is visibly supported by the image. Use clear, natural everyday language and short sentences. Start with the main subject, then explain useful surroundings, positions, actions, colors, and layout. Do not use markdown, bullet points, symbols as shorthand, technical terms, model jargon, or decorative formatting. Do not guess identity, exact age, location, intent, emotion, safety, or an object's purpose. If a detail is unclear, say that it is unclear. Mention words in the image only when clearly readable. Never invent details.",
+            prompt: "Describe this picture for someone who cannot see it. Give a useful, concise description in two to five natural sentences. Explain important visual details in words, including where things are in relation to each other. Avoid listing every tiny background detail. If the picture is blurry or a key detail cannot be determined, say so plainly.",
+            maxTokens: 220,
+            json: false,
+            search: false,
+            files: [{ mimeType: "image/jpeg", data: imageData }]
+          })
+        });
+        const responseText = await response.text();
+        let result = null;
+        try { result = JSON.parse(responseText); } catch (_) {}
+        if (!response.ok || !result?.ok) {
+          const error = new Error(result?.error || "The AI service could not process this picture.");
+          error.status = response.status;
+          throw error;
         }
         if (thisRequest !== requestNumber) return;
-        const caption = cleanCaption(result && result[0] && result[0].generated_text);
-        if (!caption) throw new Error("The model did not return a description. Try another picture.");
+        const caption = cleanCaption(result.text);
+        if (!caption) throw new Error("The AI service did not return a description. Try again.");
         description.textContent = caption;
         readButton.disabled = !("speechSynthesis" in window);
         copyButton.disabled = false;
         saveButton.disabled = false;
-        setStatus("Description ready. Please check important details against the picture.", "success");
+        setStatus("Description ready. Check important details against the picture.", "success");
         description.focus();
         if (byId("auto-read").checked) speak(caption);
       } catch (error) {
         if (thisRequest !== requestNumber) return;
-        const errorMessage = byId("caption-model").value === "detailed"
-          ? "The richer model could not describe this picture on this device. Choose the compact model and try again."
-          : error.message || "The picture could not be described. Try again.";
-        setStatus(errorMessage, "error");
+        setStatus(controller.timedOut
+          ? "The AI service took too long to respond. Please try again."
+          : readableServiceError(error, error.status), "error");
       } finally {
+        clearTimeout(timeoutId);
         if (thisRequest === requestNumber) {
-          describeButton.disabled = !selectedImage;
-          byId("caption-model").disabled = false;
+          activeDescriptionController = null;
+          describeButton.disabled = !selectedImage || !AI_AVAILABLE;
+          byId("cancel-description").disabled = true;
           byId("read-text").disabled = !selectedImage;
           progressWrap.hidden = true;
         }
       }
+    }
+
+    function cancelDescription() {
+      if (!activeDescriptionController) return;
+      requestNumber += 1;
+      activeDescriptionController.abort();
+      activeDescriptionController = null;
+      describeButton.disabled = !selectedImage || !AI_AVAILABLE;
+      byId("cancel-description").disabled = true;
+      progressWrap.hidden = true;
+      setStatus("Description cancelled.", "success");
     }
 
     function speak(text) {
@@ -624,7 +677,6 @@
       const textStatus = byId("text-status");
       button.disabled = true;
       describeButton.disabled = true;
-      byId("caption-model").disabled = true;
       byId("speak-text").disabled = true;
       output.hidden = true;
       textStatus.textContent = "Preparing the local text reader. The first use downloads its English language files.";
@@ -646,8 +698,7 @@
       } finally {
         if (thisRequest === ocrRequestNumber) {
           button.disabled = !selectedImage;
-          describeButton.disabled = !selectedImage;
-          byId("caption-model").disabled = false;
+          describeButton.disabled = !selectedImage || !AI_AVAILABLE;
         }
       }
     }
@@ -746,6 +797,7 @@
     byId("read-text").addEventListener("click", readVisibleText);
     byId("speak-text").addEventListener("click", () => speak(byId("text-output").textContent));
     describeButton.addEventListener("click", describeImage);
+    byId("cancel-description").addEventListener("click", cancelDescription);
     readButton.addEventListener("click", () => speak(description.textContent));
     byId("pause").addEventListener("click", () => {
       if (!("speechSynthesis" in window)) return;
@@ -768,6 +820,10 @@
     if ("speechSynthesis" in window) {
       populateVoices();
       window.speechSynthesis.addEventListener("voiceschanged", populateVoices);
+    }
+    if (!AI_AVAILABLE) {
+      byId("service-note").hidden = false;
+      setStatus("Open this tool on the Code A Difference website to use its shared AI service.");
     }
 
     copyButton.addEventListener("click", async () => {
